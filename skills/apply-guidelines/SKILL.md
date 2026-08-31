@@ -1,20 +1,25 @@
 ---
 name: apply-guidelines
 description: >
-  Applies the AI Coding Guidelines to a project by fetching them live from the
-  GitHub repository: task-based document routing, stack and toolchain
-  decisions, quality gates, and project audits. The skill itself ships no
-  guideline content — it loads the current rules on every run. Use when
-  starting or scaffolding a project, choosing a language/framework/stack,
-  setting up the toolchain (mise, pnpm, uv, oxlint, oxfmt, ruff,
-  golangci-lint), asking "which stack should I use" or "check this project
-  against our standards", or before delivering changes that must pass the
-  shared quality gates.
+  Loads the AI Coding Guidelines live from their GitHub repository and
+  applies them to the task: document routing, stack and toolchain
+  decisions, quality gates, and project audits. Explicit-trigger only:
+  the user invokes the guidelines or the shared standards by name or as
+  "the recommended" option — to apply, follow, check, or audit them, to
+  design the project's stack or architecture with them, to migrate the
+  current stack to the recommended one, or to initialize, scaffold, or
+  configure a project under them. The skill ships no
+  content — every run fetches the current repository. Do NOT use for
+  everyday work in an existing project — edits, bug fixes, refactors,
+  reviews, PR prep or commits, running or fixing checks, tests, lint,
+  or formatting — and do not trigger merely because mise, pnpm, uv,
+  oxlint, oxfmt, ruff, or golangci-lint appear in the conversation,
+  files, or commands.
 license: MIT
 compatibility: Requires file read access, a shell, and git. Network needed on first run and for refreshes.
 metadata:
   author: fang2hou
-  version: "4.0"
+  version: "4.1"
   source: https://github.com/fang2hou/ai-coding-guidelines
 ---
 
@@ -26,14 +31,32 @@ single source of truth, so the skill never needs content maintenance.
 
 ## When to Use
 
-- Starting, scaffolding, or configuring a project.
-- Choosing a language, framework, or library.
-- Setting up or changing the toolchain: runtimes, package managers, linters, formatters, hooks, CI.
-- Checking or auditing a project against the shared standards.
-- Delivering changes that must pass the shared quality gates.
+Explicit user intent only — never topic adjacency. Load this skill when the
+user:
+
+- Names the guidelines or the shared standards: "apply the guidelines",
+  "follow our standards here", "check this project against the guidelines",
+  or asks for an audit.
+- Asks to use the guidelines for a concrete engineering decision: "use
+  these guidelines to design the project's stack", "migrate our current
+  framework to the recommended one".
+- Asks to initialize, scaffold, or configure a project under these
+  standards.
 
 ## When NOT to Use
 
+- Everyday work in an existing project: edits, bug fixes, refactors,
+  reviews, PR preparation, commits. The project's own conventions and
+  gates rule.
+- Running or fixing checks, tests, lint, or formatting — a failing gate is
+  a task, not a trigger.
+- The toolchain names (mise, pnpm, uv, oxlint, oxfmt, ruff,
+  golangci-lint) appear in the conversation, config files, or commands —
+  presence of the tools is not a request for the guidelines.
+- Stack or toolchain questions that never invoke the guidelines or the
+  recommended stack ("which stack should I use?") — answer from the
+  project's conventions or general engineering judgment.
+- Library or API usage questions — those go to documentation lookup.
 - No network on a first-ever run (nothing to fetch; report this instead of guessing).
 - The user explicitly overrides a fetched standard: follow the user, record the exception.
 
