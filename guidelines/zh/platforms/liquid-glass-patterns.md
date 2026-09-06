@@ -1,23 +1,22 @@
 ---
 id: platforms/liquid-glass-patterns
 lang: zh
-version: 2
+version: 3
 source-lang: en
 status: active
-digest: 2b0a4c44
+digest: 1faba719
 ---
 
 # Liquid Glass 实现模式
 
 ## 范围
 
-这些模式用于 iOS 26+ 和 macOS 26+ 新应用，优先采用 SwiftUI，UIKit 和 AppKit 示例用于自定义集成。不同平台和重载的可用性可能不同，详见 [API 参考](liquid-glass-api.md)。27 示例需要 Xcode 27；最低系统版本仍为 26 时，必须检查可用性。设计决策遵循 [Liquid Glass 设计](liquid-glass-design.md)。
+这些模式用于通过 Xcode 27 构建的 iOS 27 和原生 macOS 27 应用，对应最低系统版本设为 27.0。优先采用 SwiftUI；自定义集成在 iOS 使用 UIKit，在 macOS 使用 AppKit。共享代码须隔离平台专有 API，详见 [API 参考](liquid-glass-api.md)。设计决策遵循 [Liquid Glass 设计](liquid-glass-design.md)。
 
 ## 从系统组件开始
 
-- 使用 26 或更高版本 SDK 构建以采用新系统设计。标准导航、标签栏、工具栏、sheet 和菜单无需额外添加玻璃背景。
+- 采用 27 系列 SDK 提供的系统设计。标准导航、标签栏、工具栏、sheet 和菜单无需额外添加玻璃背景。
 - 避免用自定义栏背景、边框和 sheet 样式遮盖系统材质。仅保留设计确有需要的定制，并验证效果。
-- 新项目不启用兼容模式。使用 27 系列 SDK 构建时，即使最低系统版本为 26，`UIDesignRequiresCompatibility` 也会被忽略。
 
 ## 按钮
 
@@ -45,7 +44,7 @@ Text("3 selected")
     .glassEffect(in: .rect(cornerRadius: 16))
 ```
 
-`.interactive()` 配置材质反馈，不会提供操作、键盘激活或无障碍特征。可操作内容仍应使用 `Button`。`Glass.interactive(_:)` 在 macOS 26 即可调用；macOS 27 增加针对鼠标优化的反馈，以及 AppKit 的 `effectIsInteractive` 属性。
+`.interactive()` 配置材质反馈，不会提供操作、键盘激活或无障碍特征。可操作内容仍应使用 `Button`。macOS 中，SwiftUI 使用 `Glass.interactive(_:)`，AppKit 使用 `effectIsInteractive`，提供针对鼠标优化的反馈。
 
 使用 clear 玻璃时，应把背景一并纳入设计。Apple 示例在效果下方使用 30% 不透明度的黑色；应结合实际媒体内容调整，并检查前景对比度。
 
@@ -65,7 +64,6 @@ Label("Flag", systemImage: "flag.fill")
 ```swift
 import SwiftUI
 
-@available(iOS 26.0, macOS 26.0, *)
 struct FloatingTools: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Namespace private var namespace
@@ -104,14 +102,14 @@ struct FloatingTools: View {
 - 播放控制等持久操作使用 `.tabViewBottomAccessory { ... }`。附件内部读取 `tabViewBottomAccessoryPlacement`，分别适应 `.inline`、`.expanded` 和未定义的 `nil` 状态。
 - 使用 `.searchable` 和搜索标签角色，让系统安排搜索入口。不要仅为模仿系统外观而叠加自定义搜索框。
 
-## 工具栏与 27 专用行为
+## 工具栏与导航
 
 - 用 `ToolbarSpacer(.fixed, placement:)` 按功能分组；需要弹性间距时使用 `.flexible`。自带视觉样式的工具栏内容可设置 `sharedBackgroundVisibility(.hidden)`。
 - SwiftUI 中通过条件分支决定是否包含 `ToolbarItem`。只隐藏标签可能留下项目背景或占位。UIKit 使用 `UIBarButtonItem.isHidden`。
 - iOS 27 中，用 `visibilityPriority` 指定溢出顺序，`ToolbarOverflowMenu` 放置始终位于溢出菜单的操作，`.topBarPinnedTrailing` 保留末端操作。后两者在原生 macOS 不可用，详见平台表。
 - iOS 27 的 `TabRole.prominent` 支持独立的末端标签。应在 `TabView` 中定义带标签的完整项目，角色本身不是完整的标签声明。
 
-对新的导航栏行为检查可用性，同时在 iOS 26 保留相同内容。运行时检查要求编译器和 SDK 已认识该符号：
+iOS 直接使用导航栏最小化 API。以下条件编译用于区分 iOS 导航栏行为和原生 macOS 布局：
 
 ```swift
 #if os(iOS)
@@ -120,12 +118,8 @@ struct AdaptiveNavigation<Content: View>: View {
 
     var body: some View {
         NavigationStack {
-            if #available(iOS 27.0, *) {
-                content.toolbarMinimizationBehavior(
-                    .onScrollDown, for: .navigationBar)
-            } else {
-                content
-            }
+            content.toolbarMinimizationBehavior(
+                .onScrollDown, for: .navigationBar)
         }
     }
 }
@@ -145,7 +139,6 @@ UIKit 自定义玻璃将内容添加到 `UIVisualEffectView.contentView`，并�
 ```swift
 import UIKit
 
-@available(iOS 26.0, *)
 @MainActor
 func makeGlassLabel() -> UIVisualEffectView {
     let glass = UIVisualEffectView(effect: UIGlassEffect(style: .regular))
@@ -167,7 +160,7 @@ func makeGlassLabel() -> UIVisualEffectView {
 
 - 多个相邻 UIKit 效果放入配置了 `UIGlassContainerEffect` 的 `UIVisualEffectView.contentView`，其 `spacing` 控制交互距离。
 - macOS 使用 `NSGlassEffectView` 的 `contentView`、`style`、`cornerRadius` 和可选的 `tintColor`。相关视图用 `NSGlassEffectContainerView` 分组。按钮优先使用 `.glass` 边框样式的 `NSButton`。
-- AppKit 的 `effectIsInteractive` 需要检查 macOS 27 可用性。按[设计验收要求](liquid-glass-design.md)检查性能和无障碍。
+- 对需要响应鼠标交互的 AppKit 玻璃设置 `effectIsInteractive = true`。按[设计验收要求](liquid-glass-design.md)检查性能和无障碍。
 
 ## 官方资料
 
@@ -176,4 +169,3 @@ func makeGlassLabel() -> UIVisualEffectView {
 - [TabViewBottomAccessoryPlacement](https://developer.apple.com/documentation/swiftui/tabviewbottomaccessoryplacement)
 - [What’s new in SwiftUI — WWDC26](https://developer.apple.com/videos/play/wwdc2026/269/)
 - [Modernize your UIKit app — WWDC26](https://developer.apple.com/videos/play/wwdc2026/278/)
-- [UIDesignRequiresCompatibility](https://developer.apple.com/documentation/bundleresources/information-property-list/uidesignrequirescompatibility)

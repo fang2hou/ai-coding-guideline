@@ -1,23 +1,22 @@
 ---
 id: platforms/liquid-glass-patterns
 lang: en
-version: 2
+version: 3
 source-lang: en
 status: active
-digest: 7ce8ed20
+digest: 4d335908
 ---
 
 # Liquid Glass implementation patterns
 
 ## Scope
 
-Use these recipes for new iOS 26+ and macOS 26+ apps. SwiftUI is the default; UIKit and AppKit examples cover custom integration. API availability differs by platform and overload; consult the [API reference](liquid-glass-api.md). The 27 examples require Xcode 27 and an availability check when the deployment target remains 26. Design decisions follow [Liquid Glass design](liquid-glass-design.md).
+Use these recipes for iOS 27 and native macOS 27 apps built with Xcode 27. Set the matching deployment target to 27.0. SwiftUI is the default; use UIKit on iOS and AppKit on macOS for custom integration. Shared code needs platform separation where APIs differ; consult the [API reference](liquid-glass-api.md). Design decisions follow [Liquid Glass design](liquid-glass-design.md).
 
 ## Start with system components
 
-- Build with the 26 SDK or later to adopt the new system design. Use standard navigation, tab bars, toolbars, sheets, and menus without adding another glass background.
+- Use the system design supplied by the 27 SDKs. Use standard navigation, tab bars, toolbars, sheets, and menus without adding another glass background.
 - Avoid custom bar backgrounds, borders, and sheet styling that obscure the system material. Keep customization only when the design needs it and validate the result.
-- Keep compatibility mode out of new projects. `UIDesignRequiresCompatibility` is ignored for builds using the 27 SDKs, even with a 26 deployment target.
 
 ## Buttons
 
@@ -45,7 +44,7 @@ Text("3 selected")
     .glassEffect(in: .rect(cornerRadius: 16))
 ```
 
-`.interactive()` configures the material’s response; it does not supply an action, keyboard activation, or accessibility traits. Keep actionable content in a `Button`. `Glass.interactive(_:)` is callable on macOS 26; macOS 27 adds the mouse-optimized response and AppKit’s `effectIsInteractive` property.
+`.interactive()` configures the material’s response; it does not supply an action, keyboard activation, or accessibility traits. Keep actionable content in a `Button`. On macOS, use `Glass.interactive(_:)` in SwiftUI or `effectIsInteractive` in AppKit for mouse-optimized responses.
 
 For clear glass, treat the background as part of the design. Apple’s example uses 30% black beneath the effect; adjust it against the actual media and check foreground contrast.
 
@@ -65,7 +64,6 @@ Use stable, distinct `glassEffectID` values in one namespace for insertion and r
 ```swift
 import SwiftUI
 
-@available(iOS 26.0, macOS 26.0, *)
 struct FloatingTools: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Namespace private var namespace
@@ -104,14 +102,14 @@ Use `.matchedGeometry` for nearby shapes and `.materialize` for transitions with
 - Use `.tabViewBottomAccessory { ... }` for persistent controls such as playback. Inside the accessory, read `tabViewBottomAccessoryPlacement` and adapt to `.inline`, `.expanded`, or an undefined (`nil`) placement.
 - Use `.searchable` and the search tab role for system search placement. Do not build an overlapping custom search field solely to imitate the system design.
 
-## Toolbars and 27-only behavior
+## Toolbars and navigation
 
 - Group items by function with `ToolbarSpacer(.fixed, placement:)`; use `.flexible` when flexible separation is intended. Set `sharedBackgroundVisibility(.hidden)` on toolbar content that supplies its own visual treatment.
 - In SwiftUI, conditionally include the `ToolbarItem` to remove it. Hiding only its label can leave the item’s background or space behind. UIKit uses `UIBarButtonItem.isHidden`.
 - In iOS 27, use `visibilityPriority` to rank overflow candidates, `ToolbarOverflowMenu` for actions always in overflow, and `.topBarPinnedTrailing` for a persistent trailing action. The last two are unavailable on native macOS; see the platform table.
 - `TabRole.prominent` supports a distinct trailing tab in iOS 27. Provide a labeled tab inside `TabView`; the role alone is not a complete tab declaration.
 
-Gate the new navigation-bar behavior while preserving the same content on iOS 26. Runtime checks require a compiler and SDK that already know the symbol:
+Apply navigation-bar minimization directly on iOS. The conditional compilation below separates the iOS navigation-bar behavior from the native macOS layout:
 
 ```swift
 #if os(iOS)
@@ -120,12 +118,8 @@ struct AdaptiveNavigation<Content: View>: View {
 
     var body: some View {
         NavigationStack {
-            if #available(iOS 27.0, *) {
-                content.toolbarMinimizationBehavior(
-                    .onScrollDown, for: .navigationBar)
-            } else {
-                content
-            }
+            content.toolbarMinimizationBehavior(
+                .onScrollDown, for: .navigationBar)
         }
     }
 }
@@ -145,7 +139,6 @@ For UIKit custom glass, add content to `UIVisualEffectView.contentView` and supp
 ```swift
 import UIKit
 
-@available(iOS 26.0, *)
 @MainActor
 func makeGlassLabel() -> UIVisualEffectView {
     let glass = UIVisualEffectView(effect: UIGlassEffect(style: .regular))
@@ -167,7 +160,7 @@ func makeGlassLabel() -> UIVisualEffectView {
 
 - For several nearby UIKit effects, put their effect views inside the `contentView` of a `UIVisualEffectView` configured with `UIGlassContainerEffect`. Its `spacing` controls the interaction distance.
 - On macOS, set `NSGlassEffectView.contentView`, `style`, `cornerRadius`, and optional `tintColor`. Group related views with `NSGlassEffectContainerView`. Prefer `NSButton` with the `.glass` bezel for buttons.
-- Gate AppKit’s `effectIsInteractive` on macOS 27. Check performance and accessibility with the [design validation criteria](liquid-glass-design.md).
+- Set AppKit’s `effectIsInteractive = true` for glass that responds to mouse interaction. Check performance and accessibility with the [design validation criteria](liquid-glass-design.md).
 
 ## Official references
 
@@ -176,4 +169,3 @@ func makeGlassLabel() -> UIVisualEffectView {
 - [TabViewBottomAccessoryPlacement](https://developer.apple.com/documentation/swiftui/tabviewbottomaccessoryplacement)
 - [What’s new in SwiftUI — WWDC26](https://developer.apple.com/videos/play/wwdc2026/269/)
 - [Modernize your UIKit app — WWDC26](https://developer.apple.com/videos/play/wwdc2026/278/)
-- [UIDesignRequiresCompatibility](https://developer.apple.com/documentation/bundleresources/information-property-list/uidesignrequirescompatibility)

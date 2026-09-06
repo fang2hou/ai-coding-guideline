@@ -1,19 +1,19 @@
 ---
 id: platforms/liquid-glass-design
 lang: en
-version: 2
+version: 3
 source-lang: en
 status: active
-digest: fad81917
+digest: d8fcfa6f
 ---
 
 # Liquid Glass design (Apple platforms)
 
 ## Adoption and scope
 
-New apps for iOS/iPadOS 26+, macOS 26+, tvOS 26+, and watchOS 26+ adopt the system design with Liquid Glass. Start with standard navigation and controls; add custom glass only where these cannot meet the interaction requirements. visionOS retains its own design language. Migration of older apps is outside this guideline’s scope.
+For new iOS 27 and native macOS 27 apps, adopt Liquid Glass through system navigation and controls first. Add custom glass only where standard components cannot meet the interaction requirements. Set the deployment target to iOS 27.0 or macOS 27.0 and build with Xcode 27. This guideline covers these two platforms only.
 
-The baseline is the 26 release family. The 27-specific section describes beta behavior verified on 2026-09-06; it does not raise the deployment target or require adopting a beta toolchain. Recheck Apple’s HIG, release notes, and SDK declarations when adopting a new OS release.
+The 27 SDK behavior was verified on 2026-09-06 against the available beta. Recheck Apple’s HIG, release notes, and SDK declarations when adopting the final SDK or a later update.
 
 ## Separate controls from content
 
@@ -56,7 +56,7 @@ The baseline is the 26 release family. The 27-specific section describes beta be
 - Reduce custom morphing and spring motion when Reduce Motion is enabled; a nonanimated state change is a valid fallback.
 - Validate bright, dark, busy, and moving backdrops; small windows; large text; and inactive windows. Profile scrolling and transitions with representative content on target hardware.
 
-## Changes in the 27 beta releases
+## System behavior in iOS 27 and macOS 27
 
 - Liquid Glass rendering is refined, with revised diffusion, edges, and highlights. The system appearance slider changes the material’s tint; custom interfaces must remain readable across its range.
 - Sidebars extend to the edges on iPad and Mac; inactive windows gain a clearer visual distinction. Use `appearsActive` for custom elements that need to follow window activity.

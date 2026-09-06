@@ -1,19 +1,19 @@
 ---
 id: platforms/liquid-glass-design
 lang: zh
-version: 2
+version: 3
 source-lang: en
 status: active
-digest: 4d1437f3
+digest: aeaf9a0f
 ---
 
 # Liquid Glass 设计（Apple 平台）
 
 ## 采用原则与范围
 
-面向 iOS/iPadOS 26+、macOS 26+、tvOS 26+ 和 watchOS 26+ 的新应用采用 Liquid Glass 系统设计。优先使用标准导航和控件，只有在它们无法满足交互需求时才添加自定义玻璃效果。visionOS 沿用自身的设计语言。本指南不涉及旧应用迁移。
+面向 iOS 27 和原生 macOS 27 新应用，优先通过系统导航和控件采用 Liquid Glass。只有标准组件无法满足交互需求时，才添加自定义玻璃效果。最低系统版本设为 iOS 27.0 或 macOS 27.0，使用 Xcode 27 构建。本指南仅覆盖这两个平台。
 
-基线为 26 系列系统。27 专节记录截至 2026-09-06 核验的 Beta 行为，不要求提高最低系统版本或采用 Beta 工具链。适配新系统时，重新核查 Apple HIG、发行说明和 SDK 声明。
+27 SDK 行为已于 2026-09-06 对照当前 Beta 核验。采用正式 SDK 或后续更新时，重新核查 Apple HIG、发行说明和 SDK 声明。
 
 ## 区分操作层与内容层
 
@@ -56,7 +56,7 @@ digest: 4d1437f3
 - 启用“减弱动态效果”时，减少自定义变形和弹簧动画；直接切换状态也是有效的替代方案。
 - 验收应覆盖明亮、暗色、复杂和动态背景，小窗口、大字号及非活动窗口。使用代表性内容，在目标设备上测量滚动和过渡性能。
 
-## 27 系列 Beta 变化
+## iOS 27 与 macOS 27 系统行为
 
 - Liquid Glass 调整了扩散、边缘和高光表现。系统外观滑块会改变材质着色，自定义界面必须在整个调节范围内保持可读。
 - iPad 和 Mac 的侧边栏延伸到边缘，非活动窗口的视觉区分更明显。需要随窗口活动状态变化的自定义元素使用 `appearsActive`。
