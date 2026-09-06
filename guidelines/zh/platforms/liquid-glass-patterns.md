@@ -1,68 +1,53 @@
 ---
 id: platforms/liquid-glass-patterns
 lang: zh
-version: 1
+version: 2
 source-lang: en
 status: active
-digest: fc61f492
+digest: 2b0a4c44
 ---
 
 # Liquid Glass 实现模式
 
-## 结论
+## 范围
 
-面向任务的实现配方，SwiftUI 优先，UIKit 和 AppKit 按适用场景给出。基线是 iOS 26 / macOS 26（整套玻璃 API 从该版本起可用）；iOS 27 专属 API 已标注，需要可用性门控。代码片段遵循苹果文档给出的模式；签名已对照 Xcode 27 SDK 核验。设计规则见[Liquid Glass 设计](liquid-glass-design.md)；符号细节见[Liquid Glass API 参考](liquid-glass-api.md)。
+这些模式用于 iOS 26+ 和 macOS 26+ 新应用，优先采用 SwiftUI，UIKit 和 AppKit 示例用于自定义集成。不同平台和重载的可用性可能不同，详见 [API 参考](liquid-glass-api.md)。27 示例需要 Xcode 27；最低系统版本仍为 26 时，必须检查可用性。设计决策遵循 [Liquid Glass 设计](liquid-glass-design.md)。
 
-## 先采用系统默认
+## 从系统组件开始
 
-- 标准 chrome——导航栏、标签栏、工具栏、侧边栏、sheet、菜单——在 iOS 26+ 上自动获得 Liquid Glass。不要为它写任何玻璃代码。
-- 删掉与系统外观冲突的旧定制：栏背景视图、阴影与描边、分隔线逻辑，以及 sheet 上的 `presentationBackground`。
-- 移除自定义的搜索栏和附件样式；持久功能才用 accessory view，栏内项目按功能和使用频率分组。
-- `UIDesignRequiresCompatibility`（Info.plist）可恢复旧外观——那是真正不兼容设计的最后手段，绝不是新项目的默认选项。
+- 使用 26 或更高版本 SDK 构建以采用新系统设计。标准导航、标签栏、工具栏、sheet 和菜单无需额外添加玻璃背景。
+- 避免用自定义栏背景、边框和 sheet 样式遮盖系统材质。仅保留设计确有需要的定制，并验证效果。
+- 新项目不启用兼容模式。使用 27 系列 SDK 构建时，即使最低系统版本为 26，`UIDesignRequiresCompatibility` 也会被忽略。
 
 ## 按钮
 
-- 优先用系统玻璃按钮样式，而不是把按钮包进裸玻璃效果：
+优先使用有语义的 `Button` 和系统样式。破坏性操作应明确指定角色；突出样式用于主要操作，不能替代破坏性角色。
 
 ```swift
-Button("Save") { save() }
-    .buttonStyle(.glass)             // 标准玻璃
-Button("Delete") { delete() }
-    .buttonStyle(.glassProminent)    // 强调色着色的主操作
-Button("Filter") { toggleFilters() }
-    .buttonStyle(.glass(.clear))     // 仅用于媒体富内容之上
+Button("Save", action: save)
+    .buttonStyle(.glassProminent)
+Button("Cancel", action: cancel)
+    .buttonStyle(.glass)
+Button("Delete", role: .destructive, action: delete)
+    .buttonStyle(.glass)
 ```
 
-- UIKit：`UIButton.Configuration`——`.glass()`、`.prominentGlass()`、`.clearGlass()`、`.prominentClearGlass()`。AppKit：`NSButton` 的 `.glass` bezel 样式。
-- 每个表面最多一个着色的主操作；其余保持无色玻璃（着色规则见设计文档）。
+操作闭包由应用提供。仅在满足设计文档中 clear 的使用条件时采用 `.glass(.clear)`。UIKit 的 `UIButton.Configuration` 提供 `.glass()`、`.prominentGlass()`、`.clearGlass()` 和 `.prominentClearGlass()`；AppKit 提供 `.glass` 按钮边框样式。
 
-## 自定义玻璃视图
+## 自定义玻璃
 
-- 对自定义浮动控件施加 `glassEffect`，顺序放在外观类修饰符之后——它会捕获视图内容用于渲染：
+在尺寸和外观修饰符之后应用 `glassEffect`，默认材质为 `.regular`，形状为胶囊形。仅在控件几何形状确有需要时显式指定形状。
 
 ```swift
-Text("42")
-    .font(.title)
+Text("3 selected")
+    .font(.headline)
     .padding()
-    .glassEffect()                    // 默认 capsule 形状、.regular
+    .glassEffect(in: .rect(cornerRadius: 16))
 ```
 
-```swift
-Text("42")
-    .font(.title)
-    .padding()
-    .glassEffect(in: .rect(cornerRadius: 16))          // 自定义形状
-```
+`.interactive()` 配置材质反馈，不会提供操作、键盘激活或无障碍特征。可操作内容仍应使用 `Button`。`Glass.interactive(_:)` 在 macOS 26 即可调用；macOS 27 增加针对鼠标优化的反馈，以及 AppKit 的 `effectIsInteractive` 属性。
 
-```swift
-Text("42")
-    .font(.title)
-    .padding()
-    .glassEffect(.regular.tint(.orange).interactive()) // 着色 + 触摸反馈
-```
-
-- `.interactive()` 让自定义玻璃获得系统的触摸/指针反应；macOS 上需要 macOS 27（AppKit 侧为 `NSGlassEffectView.effectIsInteractive`）。
-- clear 只用于媒体富内容之上，背景亮时加压暗层：
+使用 clear 玻璃时，应把背景一并纳入设计。Apple 示例在效果下方使用 30% 不透明度的黑色；应结合实际媒体内容调整，并检查前景对比度。
 
 ```swift
 Label("Flag", systemImage: "flag.fill")
@@ -71,103 +56,124 @@ Label("Flag", systemImage: "flag.fill")
     .background(.black.opacity(0.3))
 ```
 
-## 用 GlassEffectContainer 融合
+## 容器、变形与合并
 
-- 相邻的玻璃元素必须共享一个 `GlassEffectContainer`——它把整组放进一次渲染，并让它们融合与变形。没有它，相邻效果采样不一致。
+相关自定义玻璃效果放入同一个 `GlassEffectContainer`，由系统共同渲染并融合形状。`spacing` 控制邻近形状开始交互的距离；大于布局间距时，形状可能在静止状态就发生融合。容器能改善渲染效率，但不保证固定的渲染次数。
 
-```swift
-GlassEffectContainer(spacing: 40) {
-    HStack(spacing: 40) {
-        toolButton("pencil")
-        toolButton("eraser")
-    }
-}
-```
-
-- `spacing` 越大，越早开始融合。容器 spacing 超过布局间距时，形状在静止态就会融合。每个功能区一个容器，并控制屏幕上的效果数量——每层玻璃都有渲染开销。
-
-## 变形与合并
-
-- 给每个玻璃元素一个稳定身份，让它在层级变化间变形；动画驱动状态切换：
+在同一命名空间内使用稳定且不同的 `glassEffectID`，处理元素加入和移除。以下完整控件保留按钮语义，并在启用“减弱动态效果”时关闭自定义动画：
 
 ```swift
-@Namespace private var ns
-@State private var isExpanded = false
+import SwiftUI
 
-GlassEffectContainer(spacing: 40) {
-    HStack(spacing: 40) {
-        toolIcon("scribble.variable")
-            .glassEffect()
-            .glassEffectID("pencil", in: ns)
-        if isExpanded {
-            toolIcon("eraser.fill")
-                .glassEffect()
-                .glassEffectID("eraser", in: ns)
+@available(iOS 26.0, macOS 26.0, *)
+struct FloatingTools: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Namespace private var namespace
+    @State private var isExpanded = false
+    let mark: () -> Void
+
+    var body: some View {
+        GlassEffectContainer(spacing: 24) {
+            HStack(spacing: 16) {
+                Button(isExpanded ? "Hide tools" : "Show tools",
+                       systemImage: "slider.horizontal.3") {
+                    withAnimation(reduceMotion ? nil : .smooth) {
+                        isExpanded.toggle()
+                    }
+                }
+                .glassEffectID("toggle", in: namespace)
+
+                if isExpanded {
+                    Button("Mark", systemImage: "pencil", action: mark)
+                        .glassEffectID("mark", in: namespace)
+                }
+            }
+            .buttonStyle(.glass)
+            .labelStyle(.iconOnly)
+            .controlSize(.large)
         }
     }
 }
-// withAnimation { isExpanded.toggle() }
 ```
 
-- `.matchedGeometry`（容器 spacing 距离内的默认项）平滑变形；距离更远时用 `glassEffectTransition` 切到 `.materialize`。默认动画下 matchedGeometry 会附加缩放/位移效果——传入显式动画（`.spring` 或 `nil`）可退出。
-- `glassEffectUnion(id:namespace:)` 把多个元素在静止态合并为一个共享形状；所有成员必须形状相同且 `Glass` 变体相同。
+邻近形状适合 `.matchedGeometry`，没有合适邻近形状的过渡使用 `.materialize`。`glassEffectTransition` 放在 `glassEffect` 之后。静态合并使用 `glassEffectUnion(id:namespace:)`，同样放在各自效果之后；合并标识符、命名空间、形状和玻璃变体一致的成员会合为一个表面。合并标识符用于表面分组，与元素的变形身份不同。
 
-## 标签栏与工具栏行为
+## 标签栏与附件视图
 
-- 浮动标签栏的最小化（仅 iPhone）：`.tabBarMinimizeBehavior(.onScrollDown)`。
-- 用 `ToolbarSpacer(.fixed)` / `.flexible` 把工具栏项目拆成独立的玻璃分组；用 `sharedBackgroundVisibility(.hidden)` 去掉某个项目的共享玻璃（如头像）。
-- iOS 27 新增工具栏韧性 API——需要可用性门控：
+- iPhone 布局适合收起标签栏时，对 `TabView` 应用 `.tabBarMinimizeBehavior(.onScrollDown)`。收起后仍须让用户容易找到导航入口。
+- 播放控制等持久操作使用 `.tabViewBottomAccessory { ... }`。附件内部读取 `tabViewBottomAccessoryPlacement`，分别适应 `.inline`、`.expanded` 和未定义的 `nil` 状态。
+- 使用 `.searchable` 和搜索标签角色，让系统安排搜索入口。不要仅为模仿系统外观而叠加自定义搜索框。
+
+## 工具栏与 27 专用行为
+
+- 用 `ToolbarSpacer(.fixed, placement:)` 按功能分组；需要弹性间距时使用 `.flexible`。自带视觉样式的工具栏内容可设置 `sharedBackgroundVisibility(.hidden)`。
+- SwiftUI 中通过条件分支决定是否包含 `ToolbarItem`。只隐藏标签可能留下项目背景或占位。UIKit 使用 `UIBarButtonItem.isHidden`。
+- iOS 27 中，用 `visibilityPriority` 指定溢出顺序，`ToolbarOverflowMenu` 放置始终位于溢出菜单的操作，`.topBarPinnedTrailing` 保留末端操作。后两者在原生 macOS 不可用，详见平台表。
+- iOS 27 的 `TabRole.prominent` 支持独立的末端标签。应在 `TabView` 中定义带标签的完整项目，角色本身不是完整的标签声明。
+
+对新的导航栏行为检查可用性，同时在 iOS 26 保留相同内容。运行时检查要求编译器和 SDK 已认识该符号：
 
 ```swift
-StickerPageView().toolbar {
-    ToolbarItemGroup { UndoButton(); RedoButton() }
-        .visibilityPriority(.high)                 // 最晚进溢出菜单
-    ToolbarOverflowMenu {                          // 永远在溢出菜单
-        ChoosePhotoButton(); ExportButton()
+#if os(iOS)
+struct AdaptiveNavigation<Content: View>: View {
+    let content: Content
+
+    var body: some View {
+        NavigationStack {
+            if #available(iOS 27.0, *) {
+                content.toolbarMinimizationBehavior(
+                    .onScrollDown, for: .navigationBar)
+            } else {
+                content
+            }
+        }
     }
-    ToolbarItem(placement: .topBarPinnedTrailing) { ShareButton() }
 }
-ScrollView { content }
-    .toolbarMinimizationBehavior(.onScrollDown, for: .navigationBar) // iOS 27 改名
-Tab(role: .prominent) { CartTab() }                // 钉在尾部的 tab
+#endif
 ```
 
-- UIKit 对应物：`UITabBarController.tabBarMinimizeBehavior = .onScrollDown`；`UIBarButtonItem.hidesSharedBackground = true`；iOS 27 的 `UINavigationItem.navigationBarMinimization`。
+## 滚动边缘与背景延展
 
-## 滚动边缘效果
+- 优先保留自动滚动边缘样式。确需更明显的边界时才使用 `.scrollEdgeEffectStyle(.hard, for: .top)`；`nil` 恢复默认。自动样式可能随系统演进，适配新系统时应重新检查显式覆盖。
+- UIKit 在 `UIScrollView` 上提供各边缘效果。自定义覆盖层通过 `UIScrollEdgeElementContainerInteraction` 注册，不再叠加第二层模糊。
+- 对背景图片应用 `backgroundExtensionEffect()`，再通过覆盖层添加文字和控件。不要把效果应用到包含完整控件的侧边栏。UIKit 和 AppKit 分别提供 `UIBackgroundExtensionView` 和 `NSBackgroundExtensionView`。
 
-- 调整内容在浮动 chrome 下方的消隐方式：`.scrollEdgeEffectStyle(.soft, for: .top)`（iOS 默认）、`.hard`（不透明边界，主要用于 macOS）、`nil` 恢复系统默认。每个视图一个效果。
-- UIKit：`scrollView.topEdgeEffect.style = .hard`、`.isHidden = true`；滚动视图上的自定义浮层用 `UIScrollEdgeElementContainerInteraction` 注册，不要自建模糊。
-- iOS 27 把 `.automatic` 改为独立视觉（不再在 soft/hard 之间切换）——采用 27 SDK 时重新评估显式的 `.soft` 覆盖。
+## UIKit 与 AppKit 集成
 
-## 背景延展
-
-- 内容不满铺窗口时（侧边栏、inspector 布局），让它在视觉上延展到 chrome 下方：`.backgroundExtensionEffect()`。节制使用——背景实例只放一个；文字和控件叠在延展层之上。
+UIKit 自定义玻璃将内容添加到 `UIVisualEffectView.contentView`，并为效果视图和内容提供约束。以下工厂函数创建有尺寸约束的玻璃标签，调用方负责放置返回的视图：
 
 ```swift
-SidebarContent()
-    .backgroundExtensionEffect()
+import UIKit
+
+@available(iOS 26.0, *)
+@MainActor
+func makeGlassLabel() -> UIVisualEffectView {
+    let glass = UIVisualEffectView(effect: UIGlassEffect(style: .regular))
+    let label = UILabel()
+    label.text = "3 selected"
+    label.font = .preferredFont(forTextStyle: .headline)
+    label.adjustsFontForContentSizeCategory = true
+    label.translatesAutoresizingMaskIntoConstraints = false
+    glass.contentView.addSubview(label)
+    NSLayoutConstraint.activate([
+        label.leadingAnchor.constraint(equalTo: glass.contentView.leadingAnchor, constant: 16),
+        label.trailingAnchor.constraint(equalTo: glass.contentView.trailingAnchor, constant: -16),
+        label.topAnchor.constraint(equalTo: glass.contentView.topAnchor, constant: 12),
+        label.bottomAnchor.constraint(equalTo: glass.contentView.bottomAnchor, constant: -12)
+    ])
+    return glass
+}
 ```
 
-- UIKit：`UIBackgroundExtensionView`；AppKit：`NSBackgroundExtensionView`。
+- 多个相邻 UIKit 效果放入配置了 `UIGlassContainerEffect` 的 `UIVisualEffectView.contentView`，其 `spacing` 控制交互距离。
+- macOS 使用 `NSGlassEffectView` 的 `contentView`、`style`、`cornerRadius` 和可选的 `tintColor`。相关视图用 `NSGlassEffectContainerView` 分组。按钮优先使用 `.glass` 边框样式的 `NSButton`。
+- AppKit 的 `effectIsInteractive` 需要检查 macOS 27 可用性。按[设计验收要求](liquid-glass-design.md)检查性能和无障碍。
 
-## UIKit 模式
+## 官方资料
 
-- 通过 `UIVisualEffectView` + `UIGlassEffect` 实现自定义玻璃；子视图加到 `contentView`，绝不加到 effect view 本身：
-
-```swift
-let effect = UIGlassEffect(style: .clear)   // 或 .regular
-effect.tintColor = .systemBlue
-effect.isInteractive = true
-let glassView = UIVisualEffectView(effect: effect)
-glassView.contentView.addSubview(label)     // contentView，不是 glassView
-```
-
-- 多个相邻玻璃视图：把 `UIGlassContainerEffect`（其 `spacing` 决定融合距离）装进一个 `UIVisualEffectView`，再把各个玻璃 effect view 嵌进它的 `contentView`。
-- 隐藏工具栏项目时隐藏项目本身（`ToolbarItem`/`UIBarButtonItem` 的 `isHidden`），而不是它的内容视图。
-
-## AppKit 模式
-
-- macOS 26+ 的自定义玻璃容器：`NSGlassEffectView`——`contentView` 是唯一保证落在玻璃内的放置位置；设置 `cornerRadius`、`tintColor`、`style`。
-- macOS 27：`effectIsInteractive = true` 为包含或承托控件的玻璃启用交互反应。
-- 用 `NSGlassEffectContainerView`（`spacing`，默认 0）分组相邻玻璃以合并渲染。按钮用 `.glass` bezel 样式，不手工包玻璃。
+- [Applying Liquid Glass to custom views](https://developer.apple.com/documentation/swiftui/applying-liquid-glass-to-custom-views)
+- [Adopting Liquid Glass](https://developer.apple.com/documentation/technologyoverviews/adopting-liquid-glass)
+- [TabViewBottomAccessoryPlacement](https://developer.apple.com/documentation/swiftui/tabviewbottomaccessoryplacement)
+- [What’s new in SwiftUI — WWDC26](https://developer.apple.com/videos/play/wwdc2026/269/)
+- [Modernize your UIKit app — WWDC26](https://developer.apple.com/videos/play/wwdc2026/278/)
+- [UIDesignRequiresCompatibility](https://developer.apple.com/documentation/bundleresources/information-property-list/uidesignrequirescompatibility)

@@ -1,68 +1,53 @@
 ---
 id: platforms/liquid-glass-patterns
 lang: en
-version: 1
+version: 2
 source-lang: en
 status: active
-digest: 75bf42cb
+digest: 7ce8ed20
 ---
 
 # Liquid Glass implementation patterns
 
-## Verdict
+## Scope
 
-Task-oriented recipes for building with Liquid Glass, SwiftUI first, UIKit and AppKit where they apply. Baseline is iOS 26 / macOS 26 (the whole glass surface ships there); iOS 27-only APIs are marked and need availability gating. Snippets follow Apple's documented patterns; signatures were verified against the Xcode 27 SDK. Design rules live in [Liquid Glass design](liquid-glass-design.md); symbol details in [Liquid Glass API reference](liquid-glass-api.md).
+Use these recipes for new iOS 26+ and macOS 26+ apps. SwiftUI is the default; UIKit and AppKit examples cover custom integration. API availability differs by platform and overload; consult the [API reference](liquid-glass-api.md). The 27 examples require Xcode 27 and an availability check when the deployment target remains 26. Design decisions follow [Liquid Glass design](liquid-glass-design.md).
 
-## Adopt the system defaults first
+## Start with system components
 
-- Standard chrome — navigation bars, tab bars, toolbars, sidebars, sheets, menus — gets Liquid Glass automatically on iOS 26+. Write no glass code for it.
-- Delete the old customizations that fight the system look: bar background views, shadows and borders, divider logic, and `presentationBackground` on sheets.
-- Remove custom search-bar and accessory styling; use accessory views for persistent features only, and group bar items by function and frequency of use.
-- `UIDesignRequiresCompatibility` (Info.plist) restores the legacy look — a last resort for genuinely incompatible designs, never a default for new projects.
+- Build with the 26 SDK or later to adopt the new system design. Use standard navigation, tab bars, toolbars, sheets, and menus without adding another glass background.
+- Avoid custom bar backgrounds, borders, and sheet styling that obscure the system material. Keep customization only when the design needs it and validate the result.
+- Keep compatibility mode out of new projects. `UIDesignRequiresCompatibility` is ignored for builds using the 27 SDKs, even with a 26 deployment target.
 
 ## Buttons
 
-- Prefer system glass button styles over wrapping buttons in a raw glass effect:
+Prefer semantic `Button` controls and system styles. Keep destructive roles explicit; prominent styling is for the primary action, not a substitute for a destructive role.
 
 ```swift
-Button("Save") { save() }
-    .buttonStyle(.glass)             // standard glass
-Button("Delete") { delete() }
-    .buttonStyle(.glassProminent)    // accent-tinted, the primary action
-Button("Filter") { toggleFilters() }
-    .buttonStyle(.glass(.clear))     // over media-rich content only
+Button("Save", action: save)
+    .buttonStyle(.glassProminent)
+Button("Cancel", action: cancel)
+    .buttonStyle(.glass)
+Button("Delete", role: .destructive, action: delete)
+    .buttonStyle(.glass)
 ```
 
-- UIKit: `UIButton.Configuration` — `.glass()`, `.prominentGlass()`, `.clearGlass()`, `.prominentClearGlass()`. AppKit: `NSButton` bezel style `.glass`.
-- One tinted prominent action per surface; the rest stay untinted glass (see the design document's tinting rules).
+The action closures are supplied by the app. Use `.glass(.clear)` only under the clear-variant conditions in the design document. UIKit provides `.glass()`, `.prominentGlass()`, `.clearGlass()`, and `.prominentClearGlass()` on `UIButton.Configuration`; AppKit provides the `.glass` button bezel.
 
-## Custom glass views
+## Custom glass
 
-- Apply `glassEffect` to floating custom controls, ordered after appearance modifiers — it captures the view's content for rendering:
+Apply `glassEffect` after sizing and appearance modifiers. Its defaults are `.regular` and a capsule. Add an explicit shape only when the control’s geometry calls for it.
 
 ```swift
-Text("42")
-    .font(.title)
+Text("3 selected")
+    .font(.headline)
     .padding()
-    .glassEffect()                    // capsule shape, .regular by default
+    .glassEffect(in: .rect(cornerRadius: 16))
 ```
 
-```swift
-Text("42")
-    .font(.title)
-    .padding()
-    .glassEffect(in: .rect(cornerRadius: 16))          // custom shape
-```
+`.interactive()` configures the material’s response; it does not supply an action, keyboard activation, or accessibility traits. Keep actionable content in a `Button`. `Glass.interactive(_:)` is callable on macOS 26; macOS 27 adds the mouse-optimized response and AppKit’s `effectIsInteractive` property.
 
-```swift
-Text("42")
-    .font(.title)
-    .padding()
-    .glassEffect(.regular.tint(.orange).interactive()) // tint + touch feedback
-```
-
-- `.interactive()` opts a custom glass element into the system's touch/pointer reactions; on macOS it requires macOS 27 (`NSGlassEffectView.effectIsInteractive` in AppKit).
-- Use Clear only over media-rich content, with a dimming layer when the background is bright:
+For clear glass, treat the background as part of the design. Apple’s example uses 30% black beneath the effect; adjust it against the actual media and check foreground contrast.
 
 ```swift
 Label("Flag", systemImage: "flag.fill")
@@ -71,103 +56,124 @@ Label("Flag", systemImage: "flag.fill")
     .background(.black.opacity(0.3))
 ```
 
-## Blending with GlassEffectContainer
+## Containers, morphing, and unions
 
-- Nearby glass elements must share a `GlassEffectContainer` — it renders them in one pass and lets them blend and morph. Without it, neighboring effects sample inconsistently.
+Group related custom glass effects in a `GlassEffectContainer` so the system renders them together and can blend their shapes. `spacing` controls when nearby shapes interact; spacing larger than the layout gap can blend them at rest. Containers improve rendering efficiency but do not guarantee a fixed render-pass count.
 
-```swift
-GlassEffectContainer(spacing: 40) {
-    HStack(spacing: 40) {
-        toolButton("pencil")
-        toolButton("eraser")
-    }
-}
-```
-
-- Larger `spacing` starts blending sooner. If container spacing exceeds layout spacing, shapes blend at rest. Keep one container per functional group and limit the number of on-screen effects — every glass layer costs render passes.
-
-## Morphing and unions
-
-- Give each glass element a stable identity to morph across hierarchy changes; animate the state change:
+Use stable, distinct `glassEffectID` values in one namespace for insertion and removal. This complete control keeps button semantics and disables custom motion when Reduce Motion is enabled:
 
 ```swift
-@Namespace private var ns
-@State private var isExpanded = false
+import SwiftUI
 
-GlassEffectContainer(spacing: 40) {
-    HStack(spacing: 40) {
-        toolIcon("scribble.variable")
-            .glassEffect()
-            .glassEffectID("pencil", in: ns)
-        if isExpanded {
-            toolIcon("eraser.fill")
-                .glassEffect()
-                .glassEffectID("eraser", in: ns)
+@available(iOS 26.0, macOS 26.0, *)
+struct FloatingTools: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Namespace private var namespace
+    @State private var isExpanded = false
+    let mark: () -> Void
+
+    var body: some View {
+        GlassEffectContainer(spacing: 24) {
+            HStack(spacing: 16) {
+                Button(isExpanded ? "Hide tools" : "Show tools",
+                       systemImage: "slider.horizontal.3") {
+                    withAnimation(reduceMotion ? nil : .smooth) {
+                        isExpanded.toggle()
+                    }
+                }
+                .glassEffectID("toggle", in: namespace)
+
+                if isExpanded {
+                    Button("Mark", systemImage: "pencil", action: mark)
+                        .glassEffectID("mark", in: namespace)
+                }
+            }
+            .buttonStyle(.glass)
+            .labelStyle(.iconOnly)
+            .controlSize(.large)
         }
     }
 }
-// withAnimation { isExpanded.toggle() }
 ```
 
-- `.matchedGeometry` (the default inside spacing distance) morphs smoothly; farther apart, switch the element to `.materialize` via `glassEffectTransition`. Under the default animation matchedGeometry adds scale/offset flourishes — pass an explicit animation (`.spring`, or `nil`) to opt out.
-- `glassEffectUnion(id:namespace:)` merges several elements into one shared shape at rest; all members must share the same shape and the same `Glass` variant.
+Use `.matchedGeometry` for nearby shapes and `.materialize` for transitions without a suitable nearby shape. Apply `glassEffectTransition` after `glassEffect`. For a static union, apply `glassEffectUnion(id:namespace:)` after each effect: members with matching union identifiers, namespaces, shapes, and glass variants combine. A union identifier groups surfaces; it is not an element’s morph identity.
 
-## Tab bar and toolbar behavior
+## Tab bars and accessories
 
-- Floating tab bar minimization (iPhone only): `.tabBarMinimizeBehavior(.onScrollDown)`.
-- Group toolbar items into separate glass bubbles with `ToolbarSpacer(.fixed)` / `.flexible`; drop an item's shared glass with `sharedBackgroundVisibility(.hidden)` (e.g. a profile photo).
-- iOS 27 adds toolbar resilience APIs — gate them on availability:
+- Apply `.tabBarMinimizeBehavior(.onScrollDown)` to the `TabView` when the iPhone layout benefits from minimization. Keep navigation discoverable after collapse.
+- Use `.tabViewBottomAccessory { ... }` for persistent controls such as playback. Inside the accessory, read `tabViewBottomAccessoryPlacement` and adapt to `.inline`, `.expanded`, or an undefined (`nil`) placement.
+- Use `.searchable` and the search tab role for system search placement. Do not build an overlapping custom search field solely to imitate the system design.
+
+## Toolbars and 27-only behavior
+
+- Group items by function with `ToolbarSpacer(.fixed, placement:)`; use `.flexible` when flexible separation is intended. Set `sharedBackgroundVisibility(.hidden)` on toolbar content that supplies its own visual treatment.
+- In SwiftUI, conditionally include the `ToolbarItem` to remove it. Hiding only its label can leave the item’s background or space behind. UIKit uses `UIBarButtonItem.isHidden`.
+- In iOS 27, use `visibilityPriority` to rank overflow candidates, `ToolbarOverflowMenu` for actions always in overflow, and `.topBarPinnedTrailing` for a persistent trailing action. The last two are unavailable on native macOS; see the platform table.
+- `TabRole.prominent` supports a distinct trailing tab in iOS 27. Provide a labeled tab inside `TabView`; the role alone is not a complete tab declaration.
+
+Gate the new navigation-bar behavior while preserving the same content on iOS 26. Runtime checks require a compiler and SDK that already know the symbol:
 
 ```swift
-StickerPageView().toolbar {
-    ToolbarItemGroup { UndoButton(); RedoButton() }
-        .visibilityPriority(.high)                 // overflow last
-    ToolbarOverflowMenu {                          // always in overflow
-        ChoosePhotoButton(); ExportButton()
+#if os(iOS)
+struct AdaptiveNavigation<Content: View>: View {
+    let content: Content
+
+    var body: some View {
+        NavigationStack {
+            if #available(iOS 27.0, *) {
+                content.toolbarMinimizationBehavior(
+                    .onScrollDown, for: .navigationBar)
+            } else {
+                content
+            }
+        }
     }
-    ToolbarItem(placement: .topBarPinnedTrailing) { ShareButton() }
 }
-ScrollView { content }
-    .toolbarMinimizationBehavior(.onScrollDown, for: .navigationBar) // iOS 27 rename
-Tab(role: .prominent) { CartTab() }                // pinned trailing tab
+#endif
 ```
 
-- UIKit equivalents: `UITabBarController.tabBarMinimizeBehavior = .onScrollDown`; `UIBarButtonItem.hidesSharedBackground = true`; iOS 27 `UINavigationItem.navigationBarMinimization`.
+## Scroll edges and background extension
 
-## Scroll edge effects
+- Keep automatic scroll edge styling first. Use `.scrollEdgeEffectStyle(.hard, for: .top)` only for a deliberately stronger boundary; `nil` restores the default. Recheck explicit overrides when adopting a new OS release; automatic styling can evolve.
+- UIKit exposes per-edge effects on `UIScrollView`. Register custom overlays with `UIScrollEdgeElementContainerInteraction` rather than layering a second blur.
+- Apply `backgroundExtensionEffect()` to the background artwork before adding text and controls in an overlay. Do not apply it to an entire sidebar full of controls. UIKit and AppKit provide `UIBackgroundExtensionView` and `NSBackgroundExtensionView`.
 
-- Tune how content dissolves under floating chrome: `.scrollEdgeEffectStyle(.soft, for: .top)` (default on iOS), `.hard` (opaque boundary, mostly macOS), or `nil` for the system default. One effect per view.
-- UIKit: `scrollView.topEdgeEffect.style = .hard`, `.isHidden = true`; register custom overlays over a scroll view with `UIScrollEdgeElementContainerInteraction` instead of building custom blurs.
-- iOS 27 changed `.automatic` to its own visuals (it no longer alternates soft/hard) — re-evaluate any explicit `.soft` override when building with the 27 SDK.
+## UIKit and AppKit integration
 
-## Background extension
-
-- When content does not span the window (sidebar, inspector layouts), extend it visually under the chrome: `.backgroundExtensionEffect()`. Use sparingly — one background instance; keep text and controls above the extension.
+For UIKit custom glass, add content to `UIVisualEffectView.contentView` and supply constraints for both the effect view and its content. This factory creates a sized glass label; the caller positions the returned view:
 
 ```swift
-SidebarContent()
-    .backgroundExtensionEffect()
+import UIKit
+
+@available(iOS 26.0, *)
+@MainActor
+func makeGlassLabel() -> UIVisualEffectView {
+    let glass = UIVisualEffectView(effect: UIGlassEffect(style: .regular))
+    let label = UILabel()
+    label.text = "3 selected"
+    label.font = .preferredFont(forTextStyle: .headline)
+    label.adjustsFontForContentSizeCategory = true
+    label.translatesAutoresizingMaskIntoConstraints = false
+    glass.contentView.addSubview(label)
+    NSLayoutConstraint.activate([
+        label.leadingAnchor.constraint(equalTo: glass.contentView.leadingAnchor, constant: 16),
+        label.trailingAnchor.constraint(equalTo: glass.contentView.trailingAnchor, constant: -16),
+        label.topAnchor.constraint(equalTo: glass.contentView.topAnchor, constant: 12),
+        label.bottomAnchor.constraint(equalTo: glass.contentView.bottomAnchor, constant: -12)
+    ])
+    return glass
+}
 ```
 
-- UIKit: `UIBackgroundExtensionView`; AppKit: `NSBackgroundExtensionView`.
+- For several nearby UIKit effects, put their effect views inside the `contentView` of a `UIVisualEffectView` configured with `UIGlassContainerEffect`. Its `spacing` controls the interaction distance.
+- On macOS, set `NSGlassEffectView.contentView`, `style`, `cornerRadius`, and optional `tintColor`. Group related views with `NSGlassEffectContainerView`. Prefer `NSButton` with the `.glass` bezel for buttons.
+- Gate AppKit’s `effectIsInteractive` on macOS 27. Check performance and accessibility with the [design validation criteria](liquid-glass-design.md).
 
-## UIKit patterns
+## Official references
 
-- Custom glass through `UIVisualEffectView` + `UIGlassEffect`; subviews go to `contentView`, never the effect view:
-
-```swift
-let effect = UIGlassEffect(style: .clear)   // or .regular
-effect.tintColor = .systemBlue
-effect.isInteractive = true
-let glassView = UIVisualEffectView(effect: effect)
-glassView.contentView.addSubview(label)     // contentView, not glassView
-```
-
-- Multiple nearby glass views: host a `UIGlassContainerEffect` (its `spacing` sets the merge distance) in a `UIVisualEffectView` and nest the individual glass effect views in its `contentView`.
-- Hide a toolbar item by hiding the item (`isHidden` on the `ToolbarItem`/`UIBarButtonItem`), not its content view.
-
-## AppKit patterns
-
-- Custom glass container on macOS 26+: `NSGlassEffectView` — `contentView` is the only guaranteed in-glass placement; set `cornerRadius`, `tintColor`, `style`.
-- macOS 27: `effectIsInteractive = true` enables interactive glass reactions for glass containing or sitting behind controls.
-- Group nearby glass with `NSGlassEffectContainerView` (`spacing`, default 0) to merge render passes. Buttons use the `.glass` bezel style, not hand-wrapped glass.
+- [Applying Liquid Glass to custom views](https://developer.apple.com/documentation/swiftui/applying-liquid-glass-to-custom-views)
+- [Adopting Liquid Glass](https://developer.apple.com/documentation/technologyoverviews/adopting-liquid-glass)
+- [TabViewBottomAccessoryPlacement](https://developer.apple.com/documentation/swiftui/tabviewbottomaccessoryplacement)
+- [What’s new in SwiftUI — WWDC26](https://developer.apple.com/videos/play/wwdc2026/269/)
+- [Modernize your UIKit app — WWDC26](https://developer.apple.com/videos/play/wwdc2026/278/)
+- [UIDesignRequiresCompatibility](https://developer.apple.com/documentation/bundleresources/information-property-list/uidesignrequirescompatibility)

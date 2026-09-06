@@ -1,109 +1,79 @@
 ---
 id: platforms/liquid-glass-design
 lang: en
-version: 1
+version: 2
 source-lang: en
 status: active
-digest: 9704566d
+digest: fad81917
 ---
 
 # Liquid Glass design (Apple platforms)
 
-## Verdict
+## Adoption and scope
 
-Liquid Glass is the system design language on iOS/iPadOS 26+, macOS 26+, tvOS 26+, and watchOS 26+, refined in the iOS 27 / macOS 27 line. New Apple-platform projects adopt it; this document is mandatory reading before designing any new app UI. It imposes no migration duty on existing pre-iOS-26 apps — retrofitting is out of scope.
+New apps for iOS/iPadOS 26+, macOS 26+, tvOS 26+, and watchOS 26+ adopt the system design with Liquid Glass. Start with standard navigation and controls; add custom glass only where these cannot meet the interaction requirements. visionOS retains its own design language. Migration of older apps is outside this guideline’s scope.
 
-Adopt the system defaults first and customize only where system chrome cannot express the design. The material is still evolving (it was retuned in iOS 26.1-era updates and again in iOS 27); treat Apple's Human Interface Guidelines as the living source of truth and re-verify at each OS major release.
+The baseline is the 26 release family. The 27-specific section describes beta behavior verified on 2026-09-06; it does not raise the deployment target or require adopting a beta toolchain. Recheck Apple’s HIG, release notes, and SDK declarations when adopting a new OS release.
 
-## The two-layer model
+## Separate controls from content
 
-- Liquid Glass is a dynamic material that bends and concentrates light in real time (lensing) instead of scattering it. Tint, shadow, and dynamic range adapt continuously to the content behind it.
-- The UI splits into two layers: a functional layer of controls and navigation (tab bars, sidebars, toolbars, navigation bars, menus) floating above the content layer. Content scrolls beneath the glass; glass keeps controls legible. The content layer is where Liquid Glass must not appear — it may be opaque or use standard materials, never glass.
-- Two material families exist and they do not mix jobs: Liquid Glass for the control/navigation layer; standard materials (blur, vibrancy, thickness) for structure inside the content layer.
-- Small glass elements flip light/dark with their background; large surfaces (menus, sidebars) adapt but never flip. Elements appear by modulating lensing (materializing), not by fading.
+- Use Liquid Glass for navigation and controls above content: bars, sidebars, menus, system presentations, and custom floating controls. Let the system choose materials for standard components and their interaction states.
+- Keep backgrounds, article text, lists, tables, and content cards in the content layer. Use opaque surfaces or standard materials there. A control embedded in content may acquire glass temporarily during interaction.
+- Do not stack independent glass surfaces. Controls on an existing glass surface should use the system’s foreground treatment, fills, or vibrancy.
+- Glass adapts to its backdrop through refraction, luminosity, tint, and shadow. Preserve content beneath floating controls; do not add empty glass panels as decoration.
 
-## Where glass belongs
+## Choose regular or clear
 
-- In the functional layer: navigation bars, toolbars, tab bars, sidebars (inset and floating on iPad/Mac), menus, sheets and action sheets, transient control states (sliders and toggles take on glass while active), and custom floating controls.
-- Never in the content layer — app backgrounds, cards, and table/collection content belong to the content layer and never take Liquid Glass (HIG: "Don't use Liquid Glass in the content layer"). The only exception is the transient activation state of content-layer controls.
-- Never stack glass on glass; if an element sits on glass, use fills, transparency, or vibrancy so it reads as part of the material.
-- Never place glass where there is nothing beneath to refract — glass belongs on controls that hug the content layer, not on static content areas.
-- Glass is not decoration. Scroll edge effects in particular exist to blend content under floating chrome, not to ornament it.
+- Use `.regular` by default, especially for text and dense controls. It adjusts background blur and luminosity to support legibility.
+- Use `.clear` only over media-rich content when dimming the background is acceptable and foreground content is bold and bright. It does not provide regular’s adaptive legibility treatment.
+- For bright backgrounds, HIG suggests a black dimming layer at about 35% opacity; the SwiftUI `Glass.clear` example uses 30%. These are starting points, not a universal contrast guarantee. Verify the actual foreground and moving background together.
+- Keep related elements on the same variant. Do not mix regular and clear within one control group.
 
-## Variants: regular and clear
+## Tint and foreground color
 
-- Regular is the default: it blurs and adjusts background luminosity, adapts to any content, and stays legible at any size. Use it for text-heavy chrome (alerts, sidebars, popovers) and wherever the background could hurt legibility.
-- Clear is permanently more translucent with no adaptive legibility behavior. Apply it only when all three conditions hold: it floats over media-rich content; the content layer will not be harmed by a dimming layer; the content on the glass is bold and bright.
-- With Clear over bright content, add a dark dimming layer at roughly 35% black opacity beneath the glass. Skip it when content is already dark.
-- Never mix Regular and Clear on related elements.
-
-The 35% dimming figure, the three-condition test, and the tint limits are Apple's current published defaults and context tests — follow them, but re-check HIG at each major release instead of hard-coding them as permanent tokens.
-
-## Tinting and color
-
-- Glass has no inherent color. A tint maps one color to a range of tones keyed to the brightness behind it (stained-glass behavior) and buys contrast.
-- Reserve tint for emphasis: one primary action or status. The system tints prominent buttons' glass with the accent color automatically.
-- Do not tint many controls; put color in the content layer instead. Over colorful backgrounds, keep bars monochromatic or pick a well-differentiated accent.
-- Symbols and labels on small bars default to monochrome and flip with the background — do not force fixed light/dark text colors that fight the flip.
+- Reserve glass tint for the primary action or a meaningful status; keep secondary actions neutral. Put most branding and expressive color in the content layer.
+- Prefer semantic colors and system button styles. Small glass controls can switch foreground appearance as their backdrop changes; fixed black or white labels can defeat that adaptation.
+- Convey selection, status, and destructive actions through labels, symbols, or button roles as well as color. Tint alone is insufficient.
 
 ## Shapes and concentricity
 
-- Three shape types: fixed (constant radius), capsule (radius = half the height; naturally concentric; the bar/slider/switch/grouped-corner default), and concentric (inner radius derived from the parent's radius minus padding, computed by the system).
-- Nested containers (artwork in cards, buttons in bars) must use concentric shapes so inner radii compute automatically. Never pinch or flare corners.
-- Near iPhone screen edges, use a capsule with extra margin; on iPad/Mac, align concentrically to the window edge. For components that live both nested and standalone, use a concentric shape with a fallback radius.
-- macOS 27 gives every window the same tighter corner radius — do not assume the old per-window radii.
+- Use system control shapes first. Capsules suit standalone controls; nested rounded surfaces should maintain concentricity with their container.
+- Prefer system-derived concentric shapes where available. Give reusable shapes a fallback radius for use outside a rounded container.
+- Respect screen and window margins rather than copying a device’s corner radius. Recheck nested corners when padding, Dynamic Type, or window size changes. macOS 27 changes window corner geometry.
 
-## Layout: edge to edge
+## Layout and scroll edges
 
-- Extend backgrounds and full-bleed artwork to the display edges; scrollable content continues under floating chrome. Respect system safe areas (Dynamic Island, camera housing, bars) and design for the full window-size range on iPad.
-- Scroll edge effects replace hard dividers between floating glass and scrolling content. Soft is the default on iOS/iPadOS (subtle transition); Hard suits mostly macOS (uniform opaque boundary for text-like controls, borderless controls, pinned headers). One effect per view, consistent heights across split-view panes, never stacked, and none where no floating UI exists.
-- When content does not span the full window (sidebars, inspectors), use a background-extension view so content appears to continue behind the chrome; keep text and controls layered above it to avoid distortion.
-- iOS 27: a uniform toolbar materializes across the top as content scrolls under floating bars (automatic for standard toolbars), and iPhone apps become resizable on iPad and in iPhone Mirroring — design for a dynamic range of sizes and aspect ratios, using toolbar reflow (overflow, priorities, pinned items) instead of fixed layouts.
+- Extend backgrounds and artwork to the window edges, while keeping readable content and controls within appropriate safe areas. Do not apply `ignoresSafeArea` to the entire interactive hierarchy merely to achieve an edge-to-edge background.
+- Let scroll edge effects separate scrolling content from floating bars. Keep the automatic style unless the layout needs an explicit soft or hard boundary. Avoid duplicate effects on the same edge; align their heights across adjacent panes.
+- Use background extension on the artwork or main content that should appear beneath a sidebar or inspector. Keep text and controls out of the extended image.
+- Base layout on available view size and size classes. Preserve essential actions when the window narrows, the keyboard appears, or text grows.
 
-## Accessibility
+## Accessibility and validation
 
-- System components adapt automatically — no opt-in: Reduce Transparency makes glass frostier and obscures more; Increase Contrast turns elements predominantly black/white with a contrasting border; Reduce Motion dampens elastic/liquid behaviors. Custom glass must be tested under all three settings plus Dynamic Type.
-- Meet contrast minimums: 4.5:1 for text up to 17 pt, 3:1 for text 18 pt or larger or bold. Verify in light and dark appearance; provide a higher-contrast scheme when Increase Contrast is on.
-- iOS 27 adds a user-facing appearance slider from ultra clear to fully tinted, and macOS 27 gains the "show borders" accessibility value. Never assume one fixed glass rendering across users or OS versions.
-- For morphs and liquid motion under Reduce Motion: tighten springs, track gestures directly, prefer fades, and avoid animating into or out of blurs.
+- Test Reduce Transparency, Increase Contrast, Reduce Motion, and Dynamic Type. System materials adapt, but custom foreground colors, animations, and layouts remain the app’s responsibility.
+- Check text contrast against the actual background in light and dark appearances. Apple’s HIG specifies 4.5:1 for text up to 17 pt, and 3:1 for larger or bold text. Do not use this threshold as a reason to shrink text or make every label bold.
+- Use semantic controls with accessible names and adequate hit areas. Verify VoiceOver order, keyboard access, and the platform’s pointer or focus behavior. A visual glass reaction does not create button semantics.
+- Reduce custom morphing and spring motion when Reduce Motion is enabled; a nonanimated state change is a valid fallback.
+- Validate bright, dark, busy, and moving backdrops; small windows; large text; and inactive windows. Profile scrolling and transitions with representative content on target hardware.
 
-## What changed in iOS 27
+## Changes in the 27 beta releases
 
-- The material was retuned again: better diffusion of complex content behind glass, a darkened edge, and brighter specular highlights. Apps already using Liquid Glass get the new rendering without recompiling.
-- Users can adjust glass appearance system-wide (ultra clear ↔ fully tinted) — designs must tolerate the full range.
-- Sidebars expand to the screen edges on iPad and Mac and their icons regain accent color; menu icons are hidden by default on macOS/iPadOS (surf key actions via API).
-- Windows show a distinct inactive appearance (key custom views off `appearsActive`); custom glass can be interactive on macOS (mouse-optimized).
-- App icons render sharper with reduced translucency; Icon Composer now designs multi-layer Liquid Glass icons with refraction and previews on older OSes.
-
-## Do and don't
-
-| Do                                                                      | Don't                                                           |
-| ----------------------------------------------------------------------- | --------------------------------------------------------------- |
-| Reserve glass for floating controls and navigation                      | Put glass on content-layer views (tables, backgrounds, cards)   |
-| Use Regular by default, especially for text-heavy chrome                | Use Clear where legibility or the content layer could suffer    |
-| Use Clear only over media-rich content, with a ~35% dim layer if bright | Mix Regular and Clear on related elements                       |
-| Tint one primary action's glass                                         | Tint many controls or tint symbols                              |
-| Let glyphs stay monochrome and system-adaptive                          | Hardcode light/dark text colors against the flipping material   |
-| Use capsule/concentric shapes; let the system compute radii             | Pinch, flare, or hand-compute nested corner radii               |
-| Keep content edge-to-edge; blend with scroll edge effects               | Stack glass on glass; re-add bar backgrounds, borders, dividers |
-| One scroll edge effect per view                                         | Use scroll edge effects as decoration                           |
-| Provide light and dark colors even for single-mode apps                 | Ignore Increase Contrast or the iOS 27 appearance slider        |
-| Test Reduce Transparency, Increase Contrast, Reduce Motion              | Ship custom glass tested only at default settings               |
+- Liquid Glass rendering is refined, with revised diffusion, edges, and highlights. The system appearance slider changes the material’s tint; custom interfaces must remain readable across its range.
+- Sidebars extend to the edges on iPad and Mac; inactive windows gain a clearer visual distinction. Use `appearsActive` for custom elements that need to follow window activity.
+- Menus show fewer icons by default. Restore an icon only where it helps identify an important action.
+- iPhone apps can resize in iPhone Mirroring and on iPad. Standard bars adapt; custom layouts must preserve actions through resizing and toolbar overflow.
+- These are runtime and SDK changes with different requirements. Use the [API reference](liquid-glass-api.md) to distinguish available symbols from new runtime behavior.
 
 ## Official references
 
-- HIG Materials — <https://developer.apple.com/design/human-interface-guidelines/materials>
-- HIG Color (Liquid Glass color) — <https://developer.apple.com/design/human-interface-guidelines/color>
-- HIG Layout — <https://developer.apple.com/design/human-interface-guidelines/layout>
-- HIG Accessibility — <https://developer.apple.com/design/human-interface-guidelines/accessibility>
-- HIG Design principles — <https://developer.apple.com/design/human-interface-guidelines/design-principles>
-- WWDC25-219 Meet Liquid Glass — <https://developer.apple.com/videos/play/wwdc2025/219/>
-- WWDC25-356 Get to know the new design system — <https://developer.apple.com/videos/play/wwdc2025/356/>
-- WWDC26-102 Platforms State of the Union (iOS 27 refinements) — <https://developer.apple.com/videos/play/wwdc2026/102/>
-- WWDC26-250 Principles of great design — <https://developer.apple.com/videos/play/wwdc2026/250/>
-- Adopting Liquid Glass (technology overview) — <https://developer.apple.com/documentation/TechnologyOverviews/adopting-liquid-glass>
-- WWDC26 design guide hub — <https://developer.apple.com/wwdc26/guides/design/>
-- Apple Design Resources (Figma/Sketch kits, safe-area guides) — <https://developer.apple.com/design/resources/>
-- Icon Composer — <https://developer.apple.com/icon-composer/>
+- [HIG: Materials](https://developer.apple.com/design/human-interface-guidelines/materials)
+- [HIG: Color](https://developer.apple.com/design/human-interface-guidelines/color)
+- [HIG: Layout](https://developer.apple.com/design/human-interface-guidelines/layout)
+- [HIG: Accessibility](https://developer.apple.com/design/human-interface-guidelines/accessibility)
+- [Glass.clear](https://developer.apple.com/documentation/swiftui/glass/clear)
+- [Meet Liquid Glass — WWDC25](https://developer.apple.com/videos/play/wwdc2025/219/)
+- [Get to know the new design system — WWDC25](https://developer.apple.com/videos/play/wwdc2025/356/)
+- [What’s new in SwiftUI — WWDC26](https://developer.apple.com/videos/play/wwdc2026/269/)
+- [Platforms State of the Union — WWDC26](https://developer.apple.com/videos/play/wwdc2026/102/)
 
-Implementation code and recipes: [Liquid Glass implementation patterns](liquid-glass-patterns.md). Symbol-level details: [Liquid Glass API reference](liquid-glass-api.md).
+Implementation: [Liquid Glass patterns](liquid-glass-patterns.md). Availability: [Liquid Glass API reference](liquid-glass-api.md).

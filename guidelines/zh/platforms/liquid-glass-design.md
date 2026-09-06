@@ -1,109 +1,79 @@
 ---
 id: platforms/liquid-glass-design
 lang: zh
-version: 1
+version: 2
 source-lang: en
 status: active
-digest: d2f0845b
+digest: 4d1437f3
 ---
 
-# Liquid Glass 设计（苹果平台）
+# Liquid Glass 设计（Apple 平台）
 
-## 结论
+## 采用原则与范围
 
-Liquid Glass 是 iOS/iPadOS 26+、macOS 26+、tvOS 26+、watchOS 26+ 的系统设计语言，并在 iOS 27 / macOS 27 这一代做了细化。新的苹果平台项目必须采用；本文档是设计任何新 App UI 前的必读内容。它不给存量 pre-iOS-26 App 施加迁移义务——旧 App 改造不在本文档范围内。
+面向 iOS/iPadOS 26+、macOS 26+、tvOS 26+ 和 watchOS 26+ 的新应用采用 Liquid Glass 系统设计。优先使用标准导航和控件，只有在它们无法满足交互需求时才添加自定义玻璃效果。visionOS 沿用自身的设计语言。本指南不涉及旧应用迁移。
 
-先采用系统默认行为，只在系统 chrome 无法表达设计时才做定制。该材质仍在演进（iOS 26.1 时代和 iOS 27 各重调过一次渲染）；把苹果 HIG 当作活的唯一信息源，每次大版本发布时重新核对。
+基线为 26 系列系统。27 专节记录截至 2026-09-06 核验的 Beta 行为，不要求提高最低系统版本或采用 Beta 工具链。适配新系统时，重新核查 Apple HIG、发行说明和 SDK 声明。
 
-## 双层模型
+## 区分操作层与内容层
 
-- Liquid Glass 是一种动态材质：它实时弯曲并汇聚光线（lensing），而不是散射光线。色调、阴影和动态范围随背后内容持续自适应。
-- UI 拆成两层：由控件和导航组成的功能层（标签栏、侧边栏、工具栏、导航栏、菜单）浮在内容层之上。内容在玻璃下方滚动，玻璃保证控件可读。内容层是 Liquid Glass 的禁区——它可以是纯不透明，也可以用标准材质，但绝不用玻璃。
-- 存在两族材质且职责不互换：Liquid Glass 用于控件/导航层；标准材质（blur、vibrancy、厚度层级）用于内容层内部的结构。
-- 小的玻璃元素随背景在明暗间翻转；大表面（菜单、侧边栏）自适应但从不翻转。元素通过调节 lensing 显形（materialize），而不是淡入淡出。
+- Liquid Glass 用于内容上方的导航和操作区域，包括各类栏、侧边栏、菜单、系统呈现界面和自定义浮动控件。标准组件及其交互状态的材质由系统决定。
+- 背景、正文、列表、表格和内容卡片属于内容层，使用不透明表面或标准材质。嵌在内容中的控件可以在交互期间临时呈现玻璃效果。
+- 不叠加独立的玻璃表面。已有玻璃表面上的控件使用系统前景样式、填充或鲜明效果。
+- 玻璃通过折射、亮度、着色和阴影适应背景。让内容延续到浮动控件下方，不添加仅作装饰的空玻璃面板。
 
-## 玻璃的归属
+## 选择 regular 或 clear
 
-- 归功能层：导航栏、工具栏、标签栏、侧边栏（iPad/Mac 上为内嵌和浮动形态）、菜单、sheet 和 action sheet、控件的瞬时激活态（slider、toggle 激活时呈现玻璃），以及自定义浮动控件。
-- 绝不进内容层——App 背景、卡片、表格/集合内容属于内容层，绝不使用 Liquid Glass（HIG："Don't use Liquid Glass in the content layer"）。唯一例外是内容层控件被激活的瞬时状态。
-- 绝不玻璃叠玻璃；元素落在玻璃上时，用填充、透明度或 vibrancy，让它读起来是材质的一部分。
-- 绝不把玻璃放在下方没有可折射内容的位置——玻璃属于紧贴内容层的控件，不属于静态内容区。
-- 玻璃不是装饰。滚动边缘效果的存在意义是让内容融入浮动 chrome 下方，不是装饰品。
+- 默认使用 `.regular`，尤其适合文字和密集控件。它会调整背景模糊度和亮度，帮助保持可读性。
+- `.clear` 仅用于以图片、视频等媒体为主的内容上方，且背景允许压暗、前景内容足够粗且明亮。它不具备 regular 的自适应可读性处理。
+- 背景较亮时，HIG 建议以约 35% 不透明度的黑色遮罩压暗；SwiftUI 的 `Glass.clear` 示例使用 30%。这些数值是调试起点，不能保证任何背景下都满足对比度要求。应结合实际前景和动态背景验证。
+- 相关元素使用同一变体，不在一组控件内混用 regular 和 clear。
 
-## 变体：regular 与 clear
+## 着色与前景色
 
-- regular 是默认项：模糊并调节背景亮度，对任何内容自适应，任何尺寸下都可读。文本密集的 chrome（alert、侧边栏、popover）以及背景可能损害可读性的场合一律用它。
-- clear 永久更透明，没有任何自适应可读性行为。只在三个条件全部满足时使用：浮在媒体富内容之上；内容层不会被一层压暗层伤害；玻璃上的内容本身粗体且明亮。
-- clear 压着明亮内容时，在玻璃下方加约 35% 黑色不透明度的压暗层；内容本身已暗则跳过。
-- 相关元素之间绝不混用 regular 和 clear。
-
-35% 压暗值、三条件测试和着色限制都是苹果当前公布的默认值与场景测试——照做，但在每个大版本重新核对 HIG，不要把它们硬编码成永久参数。
-
-## 着色与颜色
-
-- 玻璃本身没有固有颜色。tint 会把一个颜色映射成随背后亮度变化的一组色调（彩玻璃行为），并换来对比度。
-- tint 只留给强调：一个主操作或状态。系统会自动用强调色给 prominent 按钮的玻璃着色。
-- 不要给一批控件着色；颜色放进内容层。背景多彩时，栏保持单色，或选一个区分度好的强调色。
-- 小型栏上的符号和文字默认单色并随背景翻转——不要强行固定明暗文字颜色去对抗翻转。
+- 玻璃着色用于主要操作或有明确含义的状态，次要操作保持中性。品牌色和表现性配色主要用于内容层。
+- 优先使用语义颜色和系统按钮样式。小型玻璃控件的前景外观可能随背景变化而切换，固定黑色或白色标签会妨碍这种适应。
+- 选中状态、业务状态和破坏性操作还应通过标签、图标或按钮角色表达，不能只靠颜色区分。
 
 ## 形状与同心性
 
-- 三种形状类型：fixed（固定圆角半径）、capsule（半径 = 高度一半，天然同心，是栏/slider/switch/分组圆角的默认）、concentric（内半径由父级半径减去内边距推导，由系统计算）。
-- 嵌套容器（卡片中的封面、栏中的按钮）必须用同心形状让内半径自动计算。绝不捏出或张开圆角。
-- 靠近 iPhone 屏幕边缘时用 capsule 并留出额外边距；iPad/Mac 上与窗口边缘同心对齐。既会嵌套又会独立出现的组件，用带兜底半径的同心形状。
-- macOS 27 上所有窗口统一使用更紧的圆角半径——不要假设旧的按窗口区分的半径。
+- 优先采用系统控件形状。独立控件适合胶囊形，嵌套的圆角表面应与容器保持同心性。
+- 有相应 API 时，让系统计算同心形状。可复用形状应提供备用圆角半径，以便在圆角容器之外使用。
+- 遵循屏幕和窗口边距，不直接复制设备圆角半径。内边距、Dynamic Type 或窗口尺寸变化后，重新检查嵌套圆角；macOS 27 也调整了窗口圆角。
 
-## 布局：边到边
+## 布局与滚动边缘
 
-- 背景和全幅视觉内容延伸到显示边缘；可滚动内容延续到浮动 chrome 下方。尊重系统安全区（灵动岛、摄像头区域、栏），并为 iPad 的整个窗口尺寸区间做设计。
-- 滚动边缘效果取代浮动玻璃与滚动内容之间的硬分隔线。soft 是 iOS/iPadOS 默认（细微过渡）；hard 主要用于 macOS（文本类控件、无边框控件、固定 header 的均匀不透明边界）。每个视图一个效果，split view 各窗格高度一致，绝不堆叠，没有浮动 UI 的地方不使用。
-- 内容不满铺窗口时（侧边栏、inspector 布局），用 background extension 让内容看起来延续到 chrome 下方；文字和控件叠在扩展层之上以免变形。
-- iOS 27：内容滚到浮动栏下方时，顶部会浮现统一的工具栏（标准工具栏自动获得）；iPhone App 在 iPad 和 iPhone Mirroring 中变为可调整尺寸——为动态的尺寸和宽高比区间设计，用工具栏重排（溢出菜单、优先级、钉住项）而不是固定布局。
+- 背景和图片可延伸至窗口边缘，正文和控件仍须遵守相应安全区。不要为了背景铺满而对整个交互视图层级应用 `ignoresSafeArea`。
+- 用滚动边缘效果区分滚动内容和浮动栏。默认保留自动样式，仅在布局确有需要时指定柔和或硬边界。同一边缘避免重复效果，相邻窗格的效果高度保持一致。
+- 对需要延展到侧边栏或检查器下方的图片、主内容使用背景延展，文字和控件不应出现在延展图像中。
+- 根据视图可用尺寸和尺寸类别布局。窗口变窄、键盘出现或文字放大时，重要操作仍须可用。
 
-## 无障碍
+## 无障碍与验收
 
-- 系统组件自动适配，无需主动开启：Reduce Transparency 让玻璃更磨砂、遮蔽更多；Increase Contrast 把元素变成接近黑/白并加对比描边；Reduce Motion 收敛弹性/液态行为。自定义玻璃必须在三个设置加 Dynamic Type 下全部测试。
-- 满足对比度下限：17 pt 以下文字 4.5:1，18 pt 及以上或粗体 3:1。明暗两种外观都要验证；开启 Increase Contrast 时提供更高对比的配色方案。
-- iOS 27 新增系统级的玻璃外观滑杆（超透明 ↔ 完全着色），macOS 27 增加 "show borders" 无障碍值。绝不假设所有用户、所有系统版本只有一种玻璃渲染。
-- Reduce Motion 下的 morph 与液态动效：收紧弹簧、直接跟随手势、优先淡入淡出、避免模糊状态的进出动画。
+- 测试“降低透明度”“增强对比度”“减弱动态效果”和 Dynamic Type。系统材质会适应设置，但自定义前景色、动画和布局仍由应用负责。
+- 在浅色和深色外观下，结合实际背景检查文字对比度。Apple HIG 对 17 pt 及以下文字要求 4.5:1，对更大或粗体文字要求 3:1。不要因此缩小文字或把所有标签改为粗体。
+- 使用有语义的控件，提供无障碍名称和足够的点击区域。验证 VoiceOver 顺序、键盘操作，以及平台对应的指针或焦点行为。玻璃的视觉反馈不会自动赋予按钮语义。
+- 启用“减弱动态效果”时，减少自定义变形和弹簧动画；直接切换状态也是有效的替代方案。
+- 验收应覆盖明亮、暗色、复杂和动态背景，小窗口、大字号及非活动窗口。使用代表性内容，在目标设备上测量滚动和过渡性能。
 
-## iOS 27 的变化
+## 27 系列 Beta 变化
 
-- 材质再次重调：玻璃对复杂背景内容的漫射更好，边缘变暗、镜面高光更亮。已采用 Liquid Glass 的 App 无需重编译即获得新渲染。
-- 用户可以全局调整玻璃外观（超透明 ↔ 完全着色）——设计必须容忍整个区间。
-- 侧边栏在 iPad 和 Mac 上扩展到屏幕边缘，图标恢复强调色；macOS/iPadOS 上菜单图标默认隐藏（通过 API 呈现关键操作）。
-- 窗口呈现明确的非激活外观（自定义视图依据 `appearsActive` 适配）；macOS 上自定义玻璃可交互（为鼠标优化）。
-- App 图标渲染更锐利、半透明感降低；Icon Composer 支持多层 Liquid Glass 图标、折射标注，并可预览旧系统效果。
+- Liquid Glass 调整了扩散、边缘和高光表现。系统外观滑块会改变材质着色，自定义界面必须在整个调节范围内保持可读。
+- iPad 和 Mac 的侧边栏延伸到边缘，非活动窗口的视觉区分更明显。需要随窗口活动状态变化的自定义元素使用 `appearsActive`。
+- 菜单默认显示更少的图标，仅在图标有助于辨识重要操作时恢复显示。
+- iPhone 应用可在 iPhone Mirroring 和 iPad 上调整窗口大小。标准栏会自动适应，自定义布局须在缩放和工具栏溢出时保留操作入口。
+- 这些变化分别涉及运行时和 SDK，要求并不相同。通过 [API 参考](liquid-glass-api.md)区分符号可用性和新增运行时行为。
 
-## 该做与不该做
+## 官方资料
 
-| 该做                                                       | 不该做                                    |
-| ---------------------------------------------------------- | ----------------------------------------- |
-| 玻璃只给浮动控件和导航                                     | 把玻璃用在内容层视图（表格、背景、卡片）  |
-| 默认用 regular，文本密集的 chrome 尤其如此                 | 在可读性或内容层可能受损的场合用 clear    |
-| clear 只压媒体富内容，背景亮时加约 35% 压暗层              | 相关元素混用 regular 和 clear             |
-| 只给一个主操作的玻璃着色                                   | 给一批控件着色，或给符号着色              |
-| 符号保持单色并交给系统自适应                               | 硬编码明/暗文字颜色对抗材质翻转           |
-| 用 capsule/同心形状，半径交给系统计算                      | 捏扁、张开或手工计算嵌套圆角              |
-| 内容边到边，用滚动边缘效果融合                             | 玻璃叠玻璃；重新加栏背景、描边、分隔线    |
-| 每个视图一个滚动边缘效果                                   | 把滚动边缘效果当装饰                      |
-| 即使 App 只有一种外观也提供明暗两套颜色                    | 忽略 Increase Contrast 或 iOS 27 外观滑杆 |
-| 测试 Reduce Transparency、Increase Contrast、Reduce Motion | 自定义玻璃只在默认设置下测过就上线        |
+- [HIG: Materials](https://developer.apple.com/design/human-interface-guidelines/materials)
+- [HIG: Color](https://developer.apple.com/design/human-interface-guidelines/color)
+- [HIG: Layout](https://developer.apple.com/design/human-interface-guidelines/layout)
+- [HIG: Accessibility](https://developer.apple.com/design/human-interface-guidelines/accessibility)
+- [Glass.clear](https://developer.apple.com/documentation/swiftui/glass/clear)
+- [Meet Liquid Glass — WWDC25](https://developer.apple.com/videos/play/wwdc2025/219/)
+- [Get to know the new design system — WWDC25](https://developer.apple.com/videos/play/wwdc2025/356/)
+- [What’s new in SwiftUI — WWDC26](https://developer.apple.com/videos/play/wwdc2026/269/)
+- [Platforms State of the Union — WWDC26](https://developer.apple.com/videos/play/wwdc2026/102/)
 
-## 官方参考
-
-- HIG Materials — <https://developer.apple.com/design/human-interface-guidelines/materials>
-- HIG Color（Liquid Glass color）— <https://developer.apple.com/design/human-interface-guidelines/color>
-- HIG Layout — <https://developer.apple.com/design/human-interface-guidelines/layout>
-- HIG Accessibility — <https://developer.apple.com/design/human-interface-guidelines/accessibility>
-- HIG 设计原则 — <https://developer.apple.com/design/human-interface-guidelines/design-principles>
-- WWDC25-219 Meet Liquid Glass — <https://developer.apple.com/videos/play/wwdc2025/219/>
-- WWDC25-356 Get to know the new design system — <https://developer.apple.com/videos/play/wwdc2025/356/>
-- WWDC26-102 Platforms State of the Union（iOS 27 细化）— <https://developer.apple.com/videos/play/wwdc2026/102/>
-- WWDC26-250 Principles of great design — <https://developer.apple.com/videos/play/wwdc2026/250/>
-- Adopting Liquid Glass 技术综述 — <https://developer.apple.com/documentation/TechnologyOverviews/adopting-liquid-glass>
-- WWDC26 设计指南汇总 — <https://developer.apple.com/wwdc26/guides/design/>
-- Apple 设计资源（Figma/Sketch 套件、安全区参考）— <https://developer.apple.com/design/resources/>
-- Icon Composer — <https://developer.apple.com/icon-composer/>
-
-实现代码与配方见[Liquid Glass 实现模式](liquid-glass-patterns.md)；符号级细节见[Liquid Glass API 参考](liquid-glass-api.md)。
+实现见 [Liquid Glass 实现模式](liquid-glass-patterns.md)，可用性见 [Liquid Glass API 参考](liquid-glass-api.md)。

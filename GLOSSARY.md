@@ -82,6 +82,9 @@ to this table in the same change.
 | scroll edge effect                 | 滚动边缘效果      | スクロールエッジエフェクト  |
 | concentricity                      | 同心性            | 同心性                      |
 | accessibility                      | 无障碍            | アクセシビリティ            |
+| inspector                          | 检查器            | インスペクター              |
+| morphing                           | 变形              | モーフィング                |
+| tint                               | 着色              | ティント                    |
 
 ## Forbidden renderings
 

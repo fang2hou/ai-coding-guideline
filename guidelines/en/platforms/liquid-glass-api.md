@@ -1,112 +1,101 @@
 ---
 id: platforms/liquid-glass-api
 lang: en
-version: 1
+version: 2
 source-lang: en
 status: active
-digest: 52679792
+digest: f20ba3e6
 ---
 
 # Liquid Glass API reference
 
 ## Scope and verification
 
-Symbol-level reference for the Liquid Glass APIs, verified against the Xcode 27 SDK interfaces (`iPhoneOS27.0.sdk`, `MacOSX27.sdk`) and Apple's documentation pages on 2026-09-06. Baseline: everything under "SwiftUI/UIKit/AppKit APIs" ships with iOS 26 / macOS 26 / tvOS 26 / watchOS 26; the "New in iOS 27" section requires 27.0 minimums and availability gating.
+Reference for new apps using the 26 release family, with 27 beta additions separated below. Verified on 2026-09-06 against Apple documentation and Xcode 27 beta build `27A5252f` (`iPhoneOS27.0.sdk`, `MacOSX27.sdk`). SDK declarations establish compile-time availability; the running OS determines rendering and interaction behavior. Beta declarations may change.
 
-There is no back deployment: apps supporting iOS 25 or earlier must gate glass code with `if #available(iOS 26.0, *)` (or `#available(macOS 26.0, *)`) and provide a fallback. visionOS does not adopt Liquid Glass — the core glass symbols are `@available(visionOS, unavailable)` and keep that platform's own design language. Design rules: [Liquid Glass design](liquid-glass-design.md); recipes: [Liquid Glass implementation patterns](liquid-glass-patterns.md).
+Versions below apply to the named symbol, not every API in its framework. iOS includes iPadOS; check Mac Catalyst separately. Core Liquid Glass effects are unavailable on visionOS, although several layout APIs exist there. An `if #available` check does not make an unavailable platform API usable; isolate such code with conditional compilation or platform-specific files.
 
-## SwiftUI: core glass APIs
+## SwiftUI glass APIs
 
-| Symbol                                                        | Purpose                                                                  |
-| ------------------------------------------------------------- | ------------------------------------------------------------------------ |
-| `glassEffect(_:in:)`                                          | Render a glass shape behind a view; capsule + `.regular` by default      |
-| `Glass`                                                       | Material configuration: `.regular`, `.clear`, `.identity`                |
-| `Glass.tint(_:)` / `Glass.interactive(_:)`                    | Tinted variant / system touch-and-pointer reactions                      |
-| `GlassEffectContainer(spacing:content:)`                      | One render pass for a group; enables blending and morphing               |
-| `glassEffectID(_:in:)`                                        | Stable identity for morphs inside a container + `Namespace`              |
-| `glassEffectUnion(id:namespace:)`                             | Merge elements into one shape at rest (same shape and variant only)      |
-| `glassEffectTransition(_:)`                                   | `.matchedGeometry` (near) or `.materialize` (far) add/remove transitions |
-| `.buttonStyle(.glass)` / `.glassProminent` / `.glass(.clear)` | System glass button styles — preferred over raw effects on buttons       |
+The following effects and styles are available from iOS/macOS/tvOS/watchOS 26 and unavailable on visionOS. Import `SwiftUI`; several declarations live in its `SwiftUICore` dependency.
 
-SwiftUI framework; iOS/iPadOS/macCatalyst/macOS/tvOS/watchOS 26.0+ — no visionOS (the material does not exist there); tvOS applies glass regardless of focus.
+| Symbol                                                        | Availability and use                                                      |
+| ------------------------------------------------------------- | ------------------------------------------------------------------------- |
+| `glassEffect(_:in:)`                                          | Glass behind content; defaults to `.regular` and a capsule                |
+| `Glass.regular` / `.clear` / `.identity`                      | Adaptive / clear / no glass effect                                        |
+| `Glass.tint(_:)` / `.interactive(_:)`                         | Configure tint and response; macOS mouse response improves in 27          |
+| `GlassEffectContainer(spacing:content:)`                      | Render related effects together; spacing controls blending                |
+| `glassEffectID(_:in:)`                                        | Stable element identity for morphing within a namespace                   |
+| `glassEffectUnion(id:namespace:)`                             | Combine matching shapes and variants with the same union ID and namespace |
+| `glassEffectTransition(_:)`                                   | `.matchedGeometry`, `.materialize`, or `.identity`                        |
+| `.buttonStyle(.glass)` / `.glassProminent` / `.glass(.clear)` | Semantic button styles; on tvOS the glass styles apply even without focus |
 
-## SwiftUI: chrome behavior APIs
+Overload distinction: `GlassButtonStyle()` and `.glass(_:)` are declared from 26.0 in this SDK; the direct initializer `GlassButtonStyle(_:)` requires 26.1. Check the declaration of the overload actually called.
 
-| Symbol                                            | Purpose                                                                                                    |
-| ------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
-| `tabBarMinimizeBehavior(_:)`                      | Floating tab bar minimizes on scroll; `.onScrollDown` is iPhone-only                                       |
-| `ToolbarSpacer(.fixed/.flexible, placement:)`     | Splits toolbar items into separate glass groupings (iOS/macOS only)                                        |
-| `sharedBackgroundVisibility(_:)` (ToolbarContent) | Drops an item's shared glass background (own grouping; iOS/macOS only)                                     |
-| `scrollEdgeEffectStyle(_:for:)`                   | `.automatic` / `.soft` / `.hard` per edge; `nil` restores system default. Modifier unavailable on visionOS |
-| `scrollEdgeEffectHidden(_:for:)`                  | Removes the edge effect for given edges (same visionOS gap)                                                |
-| `backgroundExtensionEffect()`                     | Content visually extends under sidebars/inspectors                                                         |
-| `tabViewBottomAccessory(content:)`                | Persistent accessory above the tab bar, collapsing with it (iOS family only)                               |
+## SwiftUI navigation and layout
 
-SwiftUI framework; iOS 26.0+ baseline with platform deviations noted per row (`tabBarMinimizeBehavior`, `backgroundExtensionEffect`, and the type `ScrollEdgeEffectStyle` also exist on visionOS).
+| Symbol                                                                 | Availability and use                                                                     |
+| ---------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| `tabBarMinimizeBehavior(_:)`                                           | 26 across Apple platforms; `.onScrollDown` behavior is iPhone-specific                   |
+| `ToolbarSpacer(_:placement:)` / `sharedBackgroundVisibility(_:)`       | iOS/macOS 26; unavailable on tvOS/watchOS/visionOS                                       |
+| `scrollEdgeEffectStyle(_:for:)` / `scrollEdgeEffectHidden(_:for:)`     | iOS/macOS/tvOS/watchOS 26; unavailable on visionOS despite the style type existing there |
+| `backgroundExtensionEffect()`                                          | 26 across Apple platforms; extend background content beneath adjacent UI                 |
+| `tabViewBottomAccessory(content:)` / `tabViewBottomAccessoryPlacement` | iOS 26; adapt accessory to `.inline` / `.expanded` / `nil`                               |
+| `tabViewBottomAccessory(isEnabled:content:)`                           | iOS 26.1; dynamically show or hide the accessory                                         |
 
-## UIKit APIs
+## UIKit and AppKit
 
-| Symbol                                                        | Purpose                                                             |
-| ------------------------------------------------------------- | ------------------------------------------------------------------- |
-| `UIGlassEffect(style:)`                                       | Glass material for `UIVisualEffectView`; `.regular` / `.clear`      |
-| `UIGlassEffect.tintColor` / `.isInteractive`                  | Tint; interactive touch feedback                                    |
-| `UIGlassContainerEffect` (`spacing`)                          | Container effect: nested glass views render as one combined surface |
-| `UIButton.Configuration.glass()` (+ prominent/clear variants) | Glass button configurations (no Mac Catalyst)                       |
-| `UIScrollView.topEdgeEffect` / `.bottomEdgeEffect`            | Per-edge `UIScrollEdgeEffect` (`style`, `isHidden`)                 |
-| `UIScrollEdgeElementContainerInteraction`                     | Registers custom overlays to shape the scroll edge effect           |
-| `UIBarButtonItem.hidesSharedBackground`                       | Item leaves the shared glass background                             |
-| `UITabBarController.tabBarMinimizeBehavior`                   | Tab bar minimization (UIKit side)                                   |
-| `UIBackgroundExtensionView`                                   | Background extension container                                      |
+| Symbol                                                                                              | Availability and use                                                                                                       |
+| --------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| `UIGlassEffect(style:)` / `UIGlassContainerEffect`                                                  | iOS 26; custom and grouped effects in `UIVisualEffectView`; configure `tintColor` and `isInteractive`; no visionOS/watchOS |
+| `UIButton.Configuration.glass()` / `.prominentGlass()` / `.clearGlass()` / `.prominentClearGlass()` | iOS/tvOS 26; system button configurations                                                                                  |
+| `UIScrollView.topEdgeEffect` / `.bottomEdgeEffect`                                                  | iOS/tvOS/visionOS 26; use `style` and `isHidden` on each edge effect                                                       |
+| `UIScrollEdgeElementContainerInteraction` / `UIBackgroundExtensionView`                             | iOS/tvOS/visionOS 26; layout support, not proof of glass availability                                                      |
+| `UIBarButtonItem.hidesSharedBackground` / `.isHidden`                                               | iOS 26 for the background property; iOS 16 for `isHidden`                                                                  |
+| `UITabBarController.tabBarMinimizeBehavior`                                                         | iOS 26; UIKit tab bar minimization                                                                                         |
+| `NSGlassEffectView` / `NSGlassEffectContainerView`                                                  | macOS 26; custom glass and grouping, with `contentView` and `spacing`                                                      |
+| `NSButton.BezelStyle.glass` / `NSBackgroundExtensionView`                                           | macOS 26; glass buttons / background extension                                                                             |
+| `NSGlassEffectView.effectIsInteractive`                                                             | macOS 27; interactive mouse response                                                                                       |
 
-UIKit; iOS/iPadOS/macCatalyst/tvOS 26.0+ (glass effect and button configs unavailable on visionOS/watchOS; button configs also absent on Catalyst).
+Mac Catalyst uses UIKit, not AppKit. The glass effect and all four button configurations type-check for a Catalyst 26 target with the verified SDK. Do not infer unavailability from an omitted website badge: check the Catalyst SDK declaration and compile the actual call for the target. UIKit does not provide a watchOS UI framework.
 
-## AppKit APIs
+## Additions and changes in 27
 
-| Symbol                                   | Purpose                                                              |
-| ---------------------------------------- | -------------------------------------------------------------------- |
-| `NSGlassEffectView`                      | Glass container: `contentView`, `cornerRadius`, `tintColor`, `style` |
-| `NSGlassEffectContainerView` (`spacing`) | Merges descendant glass views into fewer render passes               |
-| `NSButton.BezelStyle.glass`              | Glass bezel — preferred over custom glass behind buttons             |
-| `NSBackgroundExtensionView`              | Background extension container (titlebar/sidebar/inspector)          |
-| `NSGlassEffectView.effectIsInteractive`  | Interactive glass on macOS — 27.0+ only                              |
+| Symbol                                                                                     | Availability and use                                                                                             |
+| ------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------- |
+| `toolbarMinimizationBehavior(_:for:)`                                                      | 27; current name replacing beta `toolbarMinimizeBehavior`; `.navigationBar` is the supported placement           |
+| `toolbarMinimizationSafeAreaAdjustment(_:for:)` / `toolbarMinimizationRestoration(_:for:)` | 27; safe-area adjustment and restoration policy                                                                  |
+| `UINavigationItem.navigationBarMinimization`                                               | iOS 27; a `UIBarMinimization` value with `minimizationBehavior`, `safeAreaAdjustment`, and `restorationBehavior` |
+| `TabRole.prominent` / `UITabBarController.prominentTabIdentifier`                          | 27 / iOS 27; designate the prominent tab                                                                         |
+| `UITabBarController.Sidebar.preferredPlacement`                                            | iOS 27; opt into sidebar placement when space permits; check `isAvailable`                                       |
+| `ToolbarContent.visibilityPriority(_:)`                                                    | iOS/tvOS/watchOS/visionOS 27, macOS 26.1; overflow priority                                                      |
+| `ToolbarOverflowMenu` / `.topBarPinnedTrailing`                                            | iOS/visionOS 27; unavailable on macOS/tvOS/watchOS                                                               |
+| `toolbarColorScheme(_:for:)` / `toolbarVisibility(_:for:)` with `.statusBar`               | 27; status-bar styling and visibility support                                                                    |
+| `appearsActive`                                                                            | Already available from iOS 18/macOS 15; use for the new inactive-window appearance                               |
+| `UIMenuElement.preferredImageVisibility`                                                   | iOS 27; override default menu icon visibility where needed                                                       |
 
-AppKit; macOS 26.0+ except `effectIsInteractive` (27.0+).
+Runtime changes include refined glass rendering, the appearance slider, inactive-window styling, and scroll edge styling. Building with the 27 SDKs also changes app requirements: UIKit apps need the scene lifecycle and an appropriate launch screen. Layout must support resizable iPhone apps. These requirements are not solved by a glass availability check.
 
-## New in iOS 27
+## Implementation checks
 
-Verified in the Xcode 27 SDK and iOS 27 release notes; gate on `#available(iOS 27, *)` / `macOS 27`:
+- Keep platform availability, deployment target, build SDK, and runtime behavior distinct. Gate 27 APIs when supporting 26; keep a working 26 path.
+- Apply appearance modifiers before `glassEffect`, then identity, union, or transition modifiers. Use containers for related effects and measure actual rendering cost.
+- Use semantic buttons for actions. `ToolbarItem` has no `isHidden` property; conditionally include the item in SwiftUI.
+- Test custom labels, motion, safe areas, and backgrounds under accessibility settings. System material adaptation does not validate app content.
+- `UIDesignRequiresCompatibility` is ignored when building with the 27 SDKs, including on 26 runtimes. It is not a fallback for new projects.
+- Recheck beta names against the selected SDK; WWDC samples may retain earlier names.
 
-- `toolbarMinimizationBehavior(_:for:)` (+ `toolbarMinimizationSafeAreaAdjustment`) — renames and extends `toolbarMinimizeBehavior`; supported placement `.navigationBar`.
-- `UINavigationItem.navigationBarMinimization` (`UIBarMinimizationBehavior`: `.automatic/.never/.onScrollDown/.onScrollUp`) — replaces beta-era `barMinimizeBehavior` naming. WWDC26 sample code may show stale names.
-- `Tab(role: .prominent)` / `TabRole.prominent` and `UITabBarController.prominentTabIdentifier` — prominent tab pinned at the trailing edge.
-- `UITabBarController.Sidebar.preferredPlacement` (`.sidebar/.tabBar/.automatic`) — sidebar representation of a tab bar on iPhone when space allows.
-- `ToolbarOverflowMenu` and `ToolbarContent.visibilityPriority(_:)` — toolbar reflow under space pressure.
-- `ToolbarItemPlacement.topBarPinnedTrailing` — item pinned to the trailing edge regardless of reflow.
-- `toolbarColorScheme(_:for: .statusBar)` / `toolbarVisibility(_:for: .statusBar)` — status-bar control.
-- Environment `appearsActive` — existed since iOS 18; iOS 27 gives inactive windows a distinct look, so custom chrome should now key off it (not a new symbol).
-- `NSGlassEffectView.effectIsInteractive` (macOS 27) and `UIMenuElement.preferredImageVisibility` (menu icons hidden by default).
-- Runtime changes without new APIs: retuned material (diffusion, darkened edge, specular highlights), the user appearance slider (ultra clear ↔ fully tinted), uniform toolbar on scroll under floating bars, edge-to-edge sidebars with accent-colored icons on iPad/Mac, tighter uniform window corner radius on macOS, resizable iPhone apps.
+## Official documentation
 
-## Development notes
+- [Glass](https://developer.apple.com/documentation/swiftui/glass)
+- [GlassEffectContainer](https://developer.apple.com/documentation/swiftui/glasseffectcontainer)
+- [Applying Liquid Glass to custom views](https://developer.apple.com/documentation/swiftui/applying-liquid-glass-to-custom-views)
+- [UIGlassEffect](https://developer.apple.com/documentation/uikit/uiglasseffect)
+- [NSGlassEffectView](https://developer.apple.com/documentation/appkit/nsglasseffectview)
+- [iOS and iPadOS 27 release notes](https://developer.apple.com/documentation/ios-ipados-release-notes/ios-ipados-27-release-notes)
+- [What’s new in SwiftUI — WWDC26](https://developer.apple.com/videos/play/wwdc2026/269/)
+- [Modernize your UIKit app — WWDC26](https://developer.apple.com/videos/play/wwdc2026/278/)
+- [UIDesignRequiresCompatibility](https://developer.apple.com/documentation/bundleresources/information-property-list/uidesignrequirescompatibility)
+- [Apple engineer clarification of compatibility mode](https://developer.apple.com/forums/thread/838637)
 
-1. Group custom glass in one `GlassEffectContainer` per functional area and keep the on-screen count low — every glass layer costs render passes; glass outside containers also samples inconsistently (glass cannot sample other glass).
-2. `glassEffect` captures the view's content — order it after appearance modifiers.
-3. Morph rules: `.matchedGeometry` works within the container's `spacing`; use `.materialize` beyond it. Under the default animation matchedGeometry adds scale/offset flourishes — pass an explicit animation to opt out. `glassEffectUnion` requires identical shape and `Glass` variant across members.
-4. `.clear` needs a dimming layer over bright content (`.background(.black.opacity(0.3))` per Apple's example) and must never mix with `.regular` on related elements.
-5. Accessibility adaptation is automatic for system components only — test custom glass under Reduce Transparency, Increase Contrast, Reduce Motion, and the iOS 27 appearance slider.
-6. Platform gaps to gate: the core glass symbols are unavailable on visionOS (that platform keeps its own design language) but ship on watchOS 26; the `scrollEdgeEffectStyle`/`scrollEdgeEffectHidden` modifiers are visionOS-unavailable even though the `ScrollEdgeEffectStyle` type exists there; the `UIButton.Configuration.glass()` family is absent on Mac Catalyst per Apple's availability metadata (Catalyst code uses `UIGlassEffect`, which is available there); native macOS uses `NSGlassEffectView`.
-7. Hide toolbar items via the item (`ToolbarItem`/`UIBarButtonItem` `isHidden`), never their content views.
-8. iOS 27 `.automatic` scroll edge effect has its own visuals (no longer alternates soft/hard) — re-evaluate explicit `.soft` overrides when adopting the 27 SDK.
-9. Building with the iOS 27 SDK makes iPhone apps resizable and requires the UIScene lifecycle and a launch-screen key — new projects get these by default from current templates.
-10. `UIDesignRequiresCompatibility` (Info.plist) restores the pre-glass look; treat it as a last resort, never a new-project default.
-
-## Official documentation index
-
-- Adopting Liquid Glass — <https://developer.apple.com/documentation/TechnologyOverviews/adopting-liquid-glass>
-- Applying Liquid Glass to custom views — <https://developer.apple.com/documentation/swiftui/applying-liquid-glass-to-custom-views>
-- Liquid Glass overview — <https://developer.apple.com/documentation/TechnologyOverviews/liquid-glass>
-- Sample: Landmarks — building an app with Liquid Glass — <https://developer.apple.com/documentation/swiftui/landmarks-building-an-app-with-liquid-glass>
-- WWDC25-323 Build a SwiftUI app with the new design — <https://developer.apple.com/videos/play/wwdc2025/323/>
-- WWDC26-269 What's new in SwiftUI — <https://developer.apple.com/videos/play/wwdc2026/269/>
-- WWDC26-278 Modernize your UIKit app — <https://developer.apple.com/videos/play/wwdc2026/278/>
-- iOS & iPadOS 27 release notes — <https://developer.apple.com/documentation/ios-ipados-release-notes/ios-ipados-27-release-notes>
+Design: [Liquid Glass design](liquid-glass-design.md). Recipes: [Liquid Glass patterns](liquid-glass-patterns.md).

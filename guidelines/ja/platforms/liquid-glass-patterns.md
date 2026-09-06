@@ -1,68 +1,53 @@
 ---
 id: platforms/liquid-glass-patterns
 lang: ja
-version: 1
+version: 2
 source-lang: en
 status: active
-digest: 81c26dfd
+digest: 84b76b70
 ---
 
 # Liquid Glass 実装パターン
 
-## 判定
+## 対象範囲
 
-タスク指向のレシピ集。SwiftUI を最優先とし、UIKit と AppKit は該当箇所に示す。基線は iOS 26 / macOS 26（ガラス API 一式はここから利用可能）。iOS 27 専用 API は注記付きで、可用性ゲートが必要。コード断片は Apple のドキュメントが示すパターンに従い、シグネチャは Xcode 27 SDK と照合済みである。設計規則は[Liquid Glass デザイン](liquid-glass-design.md)、シンボル詳細は[Liquid Glass API リファレンス](liquid-glass-api.md)を参照。
+iOS 26+ と macOS 26+ 向けの新規アプリを対象とする。SwiftUI を基本とし、独自の組み込みには UIKit と AppKit の例を使う。プラットフォームやオーバーロードによって可用性が異なるため、[API リファレンス](liquid-glass-api.md)を確認する。27 の例には Xcode 27 が必要であり、最低対応 OS が 26 の場合は可用性をチェックする。設計は [Liquid Glass の設計](liquid-glass-design.md)に従う。
 
-## まずシステムのデフォルトを採用する
+## システムコンポーネントから始める
 
-- 標準 chrome——ナビゲーションバー、タブバー、ツールバー、サイドバー、sheet、メニュー——は iOS 26+ で自動的に Liquid Glass を得る。ここにガラスのコードを書かない。
-- システムの見た目と衝突する旧来のカスタマイズを削除する：バーの背景ビュー、影と境界線、区切り線のロジック、sheet の `presentationBackground`。
-- カスタムの検索バーとアクセサリのスタイルを外す。永続的な機能だけがアクセサリビューを使い、バー項目は機能と利用頻度でグループ化する。
-- `UIDesignRequiresCompatibility`（Info.plist）は従来の見た目を復元する——本当に両立できない設計のための最終手段であり、新規プロジェクトのデフォルトではない。
+- 新しいシステムデザインを採用するには、26 以降の SDK でビルドする。標準のナビゲーション、タブバー、ツールバー、シート、メニューにはガラス背景を追加しない。
+- 独自のバー背景、枠線、シートのスタイルでシステムのマテリアルを覆わない。設計上必要なカスタマイズだけを残し、結果を検証する。
+- 新規プロジェクトでは互換モードを使わない。27 系 SDK でビルドすると、最低対応 OS が 26 でも `UIDesignRequiresCompatibility` は無視される。
 
 ## ボタン
 
-- 生のガラス効果でボタンを包むより、システムのガラスボタンスタイルを優先する：
+操作には `Button` とシステムのスタイルを優先する。破壊的な操作はロールで明示する。主要な操作を強調するスタイルは、破壊的な操作のロールを代替しない。
 
 ```swift
-Button("Save") { save() }
-    .buttonStyle(.glass)             // 標準ガラス
-Button("Delete") { delete() }
-    .buttonStyle(.glassProminent)    // アクセント色の主要アクション
-Button("Filter") { toggleFilters() }
-    .buttonStyle(.glass(.clear))     // メディアリッチなコンテンツ上でのみ
+Button("Save", action: save)
+    .buttonStyle(.glassProminent)
+Button("Cancel", action: cancel)
+    .buttonStyle(.glass)
+Button("Delete", role: .destructive, action: delete)
+    .buttonStyle(.glass)
 ```
 
-- UIKit：`UIButton.Configuration`——`.glass()`、`.prominentGlass()`、`.clearGlass()`、`.prominentClearGlass()`。AppKit：`NSButton` の `.glass` ベゼルスタイル。
-- 一つの表面につきティントを付けた主要アクションは一つまで。それ以外は無色のガラスのままにする（着色規則はデザイン文書を参照）。
+操作のクロージャはアプリ側で用意する。`.glass(.clear)` は設計文書の clear の使用条件を満たす場合に限る。UIKit の `UIButton.Configuration` には `.glass()`、`.prominentGlass()`、`.clearGlass()`、`.prominentClearGlass()` があり、AppKit ではボタンのベゼルに `.glass` を指定できる。
 
-## カスタムガラスビュー
+## カスタムのガラス効果
 
-- カスタムの浮遊コントロールに `glassEffect` を適用する。外観系モディファイアの後に置く——このモディファイアはビューの内容をキャプチャして描画に使う：
+サイズと外観を設定するモディファイアの後に `glassEffect` を適用する。標準は `.regular` のカプセル形状となる。コントロールの形状に必要な場合だけ、明示的に形状を指定する。
 
 ```swift
-Text("42")
-    .font(.title)
+Text("3 selected")
+    .font(.headline)
     .padding()
-    .glassEffect()                    // デフォルトは capsule 形状・.regular
+    .glassEffect(in: .rect(cornerRadius: 16))
 ```
 
-```swift
-Text("42")
-    .font(.title)
-    .padding()
-    .glassEffect(in: .rect(cornerRadius: 16))          // カスタム形状
-```
+`.interactive()` が設定するのはマテリアルの反応である。操作、キーボードからの実行、アクセシビリティ特性は追加されない。操作可能な内容には `Button` を使う。`Glass.interactive(_:)` 自体は macOS 26 から呼び出せる。macOS 27 ではマウス向けの反応と AppKit の `effectIsInteractive` プロパティが加わる。
 
-```swift
-Text("42")
-    .font(.title)
-    .padding()
-    .glassEffect(.regular.tint(.orange).interactive()) // ティント + タッチ反応
-```
-
-- `.interactive()` はカスタムガラスにシステムのタッチ／ポインタ反応を与える。macOS では macOS 27 が必要（AppKit では `NSGlassEffectView.effectIsInteractive`）。
-- clear はメディアリッチなコンテンツの上だけ。背景が明るい場合は調光レイヤーを置く：
+clear のガラス効果では背景も含めて設計する。Apple の例は効果の背後に不透明度 30% の黒を置く。実際の画像や動画に合わせて調整し、前景のコントラストを確認する。
 
 ```swift
 Label("Flag", systemImage: "flag.fill")
@@ -71,103 +56,124 @@ Label("Flag", systemImage: "flag.fill")
     .background(.black.opacity(0.3))
 ```
 
-## GlassEffectContainer による融合
+## コンテナー、モーフィング、結合
 
-- 隣接するガラス要素は一つの `GlassEffectContainer` を共有しなければならない——グループ全体を一回の描画にまとめ、融合とモーフを可能にする。無い場合、隣接する効果のサンプリングが不一致になる。
+関連するカスタムのガラス効果を `GlassEffectContainer` にまとめ、システムが一緒に描画して形状を融合できるようにする。`spacing` は近接する形状が相互作用を始める距離を指定する。レイアウトの間隔より大きいと、静止時にも融合する場合がある。コンテナーは描画効率を改善するが、描画パス数を固定する保証はない。
 
-```swift
-GlassEffectContainer(spacing: 40) {
-    HStack(spacing: 40) {
-        toolButton("pencil")
-        toolButton("eraser")
-    }
-}
-```
-
-- `spacing` を大きくすると融合の開始が早まる。コンテナの spacing がレイアウト間隔を超えると、静止状態でも形状が融合する。機能グループごとに一つのコンテナとし、画面上の効果数を抑える——ガラスの層にはそれぞれ描画コストがかかる。
-
-## モーフとユニオン
-
-- 各ガラス要素に安定した識別子を与え、階層変更をまたいでモーフさせる。状態切替をアニメーションで駆動する：
+要素の追加と削除には、同じ名前空間で安定した重複のない `glassEffectID` を使う。次のコントロールはボタンの意味を保ち、「視差効果を減らす」が有効な場合は独自のアニメーションを無効にする。
 
 ```swift
-@Namespace private var ns
-@State private var isExpanded = false
+import SwiftUI
 
-GlassEffectContainer(spacing: 40) {
-    HStack(spacing: 40) {
-        toolIcon("scribble.variable")
-            .glassEffect()
-            .glassEffectID("pencil", in: ns)
-        if isExpanded {
-            toolIcon("eraser.fill")
-                .glassEffect()
-                .glassEffectID("eraser", in: ns)
+@available(iOS 26.0, macOS 26.0, *)
+struct FloatingTools: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Namespace private var namespace
+    @State private var isExpanded = false
+    let mark: () -> Void
+
+    var body: some View {
+        GlassEffectContainer(spacing: 24) {
+            HStack(spacing: 16) {
+                Button(isExpanded ? "Hide tools" : "Show tools",
+                       systemImage: "slider.horizontal.3") {
+                    withAnimation(reduceMotion ? nil : .smooth) {
+                        isExpanded.toggle()
+                    }
+                }
+                .glassEffectID("toggle", in: namespace)
+
+                if isExpanded {
+                    Button("Mark", systemImage: "pencil", action: mark)
+                        .glassEffectID("mark", in: namespace)
+                }
+            }
+            .buttonStyle(.glass)
+            .labelStyle(.iconOnly)
+            .controlSize(.large)
         }
     }
 }
-// withAnimation { isExpanded.toggle() }
 ```
 
-- `.matchedGeometry`（コンテナの spacing 距離内のデフォルト）は滑らかにモーフする。距離が離れる場合は `glassEffectTransition` で `.materialize` に切る。デフォルトアニメーションでは matchedGeometry がスケール・オフセットの演出を追加する——明示的なアニメーション（`.spring` または `nil`）を渡して除外する。
-- `glassEffectUnion(id:namespace:)` は複数の要素を静止状態で一つの共有形状にマージする。全メンバーが同じ形状と同じ `Glass` バリアントを持つ必要がある。
+近い形状には `.matchedGeometry`、近くに適切な形状がない遷移には `.materialize` を使う。`glassEffectTransition` は `glassEffect` の後に置く。静的に結合する場合は、各効果の後に `glassEffectUnion(id:namespace:)` を適用する。結合用の識別子、名前空間、形状、ガラスのバリアントが一致する要素が一つの面になる。結合用の識別子と、モーフィングで要素を識別する ID は役割が異なる。
 
-## タブバーとツールバーの挙動
+## タブバーとアクセサリビュー
 
-- 浮遊タブバーの最小化（iPhone のみ）：`.tabBarMinimizeBehavior(.onScrollDown)`。
-- `ToolbarSpacer(.fixed)` / `.flexible` でツールバー項目を独立したガラスグループに分ける。`sharedBackgroundVisibility(.hidden)` で特定項目（プロフィール写真など）の共有ガラスを外す。
-- iOS 27 はツールバーの適応性 API を追加する——可用性ゲートが必要：
+- iPhone のレイアウトで最小化が有用な場合は、`TabView` に `.tabBarMinimizeBehavior(.onScrollDown)` を適用する。折りたたんだ後もナビゲーションを見つけやすくする。
+- 再生操作などの常設コントロールには `.tabViewBottomAccessory { ... }` を使う。アクセサリ内で `tabViewBottomAccessoryPlacement` を読み、`.inline`、`.expanded`、未定義の `nil` に応じて表示を変える。
+- 検索の配置には `.searchable` と検索タブのロールを使う。システムの外観を模倣するためだけに、独自の検索欄を重ねない。
+
+## ツールバーと 27 専用の挙動
+
+- `ToolbarSpacer(.fixed, placement:)` で操作を機能別に分ける。伸縮する間隔には `.flexible` を使う。独自の外観を持つツールバー項目には `sharedBackgroundVisibility(.hidden)` を設定できる。
+- SwiftUI では条件分岐で `ToolbarItem` 自体を含めるかどうか決める。ラベルだけを隠すと、背景や空間が残る場合がある。UIKit では `UIBarButtonItem.isHidden` を使う。
+- iOS 27 では `visibilityPriority` でオーバーフローの優先順位を指定し、常にメニューへ収める操作を `ToolbarOverflowMenu` に置く。末尾に残す操作には `.topBarPinnedTrailing` を使う。後二者はネイティブの macOS では利用できない。プラットフォーム表を参照する。
+- iOS 27 の `TabRole.prominent` は末尾の独立したタブに使える。`TabView` 内でラベルを備えたタブを定義する。ロールだけではタブの宣言は完成しない。
+
+新しいナビゲーションバーの挙動は可用性を確認して使い、iOS 26 でも同じコンテンツを表示する。実行時のチェックを記述するには、そのシンボルを認識するコンパイラーと SDK が必要である。
 
 ```swift
-StickerPageView().toolbar {
-    ToolbarItemGroup { UndoButton(); RedoButton() }
-        .visibilityPriority(.high)                 // 最後までオーバーフローしない
-    ToolbarOverflowMenu {                          // 常にオーバーフローメニュー
-        ChoosePhotoButton(); ExportButton()
+#if os(iOS)
+struct AdaptiveNavigation<Content: View>: View {
+    let content: Content
+
+    var body: some View {
+        NavigationStack {
+            if #available(iOS 27.0, *) {
+                content.toolbarMinimizationBehavior(
+                    .onScrollDown, for: .navigationBar)
+            } else {
+                content
+            }
+        }
     }
-    ToolbarItem(placement: .topBarPinnedTrailing) { ShareButton() }
 }
-ScrollView { content }
-    .toolbarMinimizationBehavior(.onScrollDown, for: .navigationBar) // iOS 27 での改名
-Tab(role: .prominent) { CartTab() }                // 末尾にピン留めされたタブ
+#endif
 ```
 
-- UIKit 側の対応物：`UITabBarController.tabBarMinimizeBehavior = .onScrollDown`、`UIBarButtonItem.hidesSharedBackground = true`、iOS 27 の `UINavigationItem.navigationBarMinimization`。
+## スクロール端と背景の延長
 
-## スクロールエッジエフェクト
+- スクロール端のスタイルは原則として自動のままにする。境界を明確にする必要がある場合だけ `.scrollEdgeEffectStyle(.hard, for: .top)` を使う。`nil` で標準に戻る。自動スタイルは OS によって変わり得るため、新しい OS に対応する際は明示的な指定を見直す。
+- UIKit では `UIScrollView` から各辺の効果を設定する。独自のオーバーレイは `UIScrollEdgeElementContainerInteraction` に登録し、別のぼかしを重ねない。
+- 背景画像に `backgroundExtensionEffect()` を適用してから、文字とコントロールをオーバーレイで追加する。操作部品を含むサイドバー全体には適用しない。UIKit と AppKit にはそれぞれ `UIBackgroundExtensionView` と `NSBackgroundExtensionView` がある。
 
-- 浮遊 chrome の下での内容の溶け込み方を調整する：`.scrollEdgeEffectStyle(.soft, for: .top)`（iOS のデフォルト）、`.hard`（不透明な境界、主に macOS）、`nil` でシステムデフォルトに戻す。ビューごとに一つ。
-- UIKit：`scrollView.topEdgeEffect.style = .hard`、`.isHidden = true`。スクロールビュー上のカスタムオーバーレイは自前のぼかしを構築せず `UIScrollEdgeElementContainerInteraction` で登録する。
-- iOS 27 では `.automatic` が独自の見た目を持つ（soft/hard の切り替えをしない）——27 SDK 採用時に明示的な `.soft` オーバーライドを再評価する。
+## UIKit と AppKit への組み込み
 
-## 背景の延長
-
-- 内容がウィンドウを満たさないとき（サイドバー、inspector レイアウト）、chrome の下へ視覚的に延長する：`.backgroundExtensionEffect()`。控えめに使う——背景インスタンスは一つ、テキストとコントロールはその上に重ねる。
+UIKit のカスタムガラスでは、`UIVisualEffectView.contentView` に内容を追加し、効果のビューと内容の両方に制約を設ける。次の関数はサイズ制約を持つガラスラベルを作る。返されたビューの配置は呼び出し側で行う。
 
 ```swift
-SidebarContent()
-    .backgroundExtensionEffect()
+import UIKit
+
+@available(iOS 26.0, *)
+@MainActor
+func makeGlassLabel() -> UIVisualEffectView {
+    let glass = UIVisualEffectView(effect: UIGlassEffect(style: .regular))
+    let label = UILabel()
+    label.text = "3 selected"
+    label.font = .preferredFont(forTextStyle: .headline)
+    label.adjustsFontForContentSizeCategory = true
+    label.translatesAutoresizingMaskIntoConstraints = false
+    glass.contentView.addSubview(label)
+    NSLayoutConstraint.activate([
+        label.leadingAnchor.constraint(equalTo: glass.contentView.leadingAnchor, constant: 16),
+        label.trailingAnchor.constraint(equalTo: glass.contentView.trailingAnchor, constant: -16),
+        label.topAnchor.constraint(equalTo: glass.contentView.topAnchor, constant: 12),
+        label.bottomAnchor.constraint(equalTo: glass.contentView.bottomAnchor, constant: -12)
+    ])
+    return glass
+}
 ```
 
-- UIKit：`UIBackgroundExtensionView`。AppKit：`NSBackgroundExtensionView`。
+- 隣接する複数の UIKit 効果は、`UIGlassContainerEffect` を設定した `UIVisualEffectView` の `contentView` 内に配置する。`spacing` が相互作用の距離を決める。
+- macOS では `NSGlassEffectView` の `contentView`、`style`、`cornerRadius` と必要に応じて `tintColor` を設定する。関連するビューは `NSGlassEffectContainerView` でまとめる。ボタンには `.glass` ベゼルの `NSButton` を優先する。
+- AppKit の `effectIsInteractive` は macOS 27 の可用性を確認して使う。[設計上の検証項目](liquid-glass-design.md)に沿って性能とアクセシビリティを確認する。
 
-## UIKit のパターン
+## 公式資料
 
-- カスタムガラスは `UIVisualEffectView` + `UIGlassEffect` で実装する。サブビューは `contentView` に追加し、effect view そのものには決して追加しない：
-
-```swift
-let effect = UIGlassEffect(style: .clear)   // または .regular
-effect.tintColor = .systemBlue
-effect.isInteractive = true
-let glassView = UIVisualEffectView(effect: effect)
-glassView.contentView.addSubview(label)     // contentView であり glassView ではない
-```
-
-- 隣接する複数のガラスビュー：`UIGlassContainerEffect`（`spacing` が融合距離を決める）を一つの `UIVisualEffectView` に宿らせ、個々のガラス effect view をその `contentView` にネストする。
-- ツールバー項目の非表示は、内容ビューではなく項目そのもの（`ToolbarItem`／`UIBarButtonItem` の `isHidden`）で行う。
-
-## AppKit のパターン
-
-- macOS 26+ のカスタムガラスコンテナー：`NSGlassEffectView`——ガラス内に置かれる保証があるのは `contentView` だけ。`cornerRadius`、`tintColor`、`style` を設定する。
-- macOS 27：`effectIsInteractive = true` で、コントロールを含む／支えるガラスにインタラクティブな反応を有効化する。
-- 隣接するガラスは `NSGlassEffectContainerView`（`spacing`、デフォルト 0）でグループ化し描画パスをまとめる。ボタンは手作りのガラスではなく `.glass` ベゼルスタイルを使う。
+- [Applying Liquid Glass to custom views](https://developer.apple.com/documentation/swiftui/applying-liquid-glass-to-custom-views)
+- [Adopting Liquid Glass](https://developer.apple.com/documentation/technologyoverviews/adopting-liquid-glass)
+- [TabViewBottomAccessoryPlacement](https://developer.apple.com/documentation/swiftui/tabviewbottomaccessoryplacement)
+- [What’s new in SwiftUI — WWDC26](https://developer.apple.com/videos/play/wwdc2026/269/)
+- [Modernize your UIKit app — WWDC26](https://developer.apple.com/videos/play/wwdc2026/278/)
+- [UIDesignRequiresCompatibility](https://developer.apple.com/documentation/bundleresources/information-property-list/uidesignrequirescompatibility)
