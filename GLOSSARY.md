@@ -71,6 +71,17 @@ to this table in the same change.
 | explanation                        | 解释              | 解説                        |
 | performance                        | 性能              | 性能                        |
 | experiments                        | 实验              | 実験                        |
+| design language                    | 设计语言          | デザイン言語                |
+| material                           | 材质              | マテリアル                  |
+| control                            | 控件              | コントロール                |
+| navigation bar                     | 导航栏            | ナビゲーションバー          |
+| tab bar                            | 标签栏            | タブバー                    |
+| toolbar                            | 工具栏            | ツールバー                  |
+| sidebar                            | 侧边栏            | サイドバー                  |
+| safe area                          | 安全区            | セーフエリア                |
+| scroll edge effect                 | 滚动边缘效果      | スクロールエッジエフェクト  |
+| concentricity                      | 同心性            | 同心性                      |
+| accessibility                      | 无障碍            | アクセシビリティ            |
 
 ## Forbidden renderings
 
